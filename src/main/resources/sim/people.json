@@ -1,0 +1,162 @@
+[
+  {
+    "id": "ravi",
+    "name": "Ravi Menon",
+    "team": "platform",
+    "role": "Engineering lead",
+    "lead": true,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "neha",
+    "name": "Neha Kapoor",
+    "team": "platform",
+    "role": "Backend engineer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "arjun",
+    "name": "Arjun Iyer",
+    "team": "platform",
+    "role": "Backend engineer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "sara",
+    "name": "Sara Thomas",
+    "team": "platform",
+    "role": "SRE",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "kabir",
+    "name": "Kabir Shah",
+    "team": "platform",
+    "role": "Frontend engineer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "meera",
+    "name": "Meera Rao",
+    "team": "analytics",
+    "role": "Analytics lead",
+    "lead": true,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "dev",
+    "name": "Dev Malhotra",
+    "team": "analytics",
+    "role": "Data engineer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "ananya",
+    "name": "Ananya Gupta",
+    "team": "analytics",
+    "role": "Data scientist",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "rahul",
+    "name": "Rahul Verma",
+    "team": "analytics",
+    "role": "Analyst",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "isha",
+    "name": "Isha Nair",
+    "team": "analytics",
+    "role": "Data engineer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "priya",
+    "name": "Priya Sharma",
+    "team": "customer-success",
+    "role": "Customer success lead",
+    "lead": true,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "vikram",
+    "name": "Vikram Singh",
+    "team": "customer-success",
+    "role": "Account manager",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "leela",
+    "name": "Leela Joseph",
+    "team": "customer-success",
+    "role": "Account manager",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "omar",
+    "name": "Omar Khan",
+    "team": "customer-success",
+    "role": "Support engineer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "tara",
+    "name": "Tara Das",
+    "team": "customer-success",
+    "role": "Onboarding specialist",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "aditi",
+    "name": "Aditi Bose",
+    "team": "product",
+    "role": "Head of product",
+    "lead": true,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "karan",
+    "name": "Karan Mehta",
+    "team": "product",
+    "role": "Product manager",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "zoya",
+    "name": "Zoya Ali",
+    "team": "product",
+    "role": "Product designer",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "nikhil",
+    "name": "Nikhil Joshi",
+    "team": "product",
+    "role": "Product manager",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  },
+  {
+    "id": "ritu",
+    "name": "Ritu Pillai",
+    "team": "product",
+    "role": "UX researcher",
+    "lead": false,
+    "timezone": "Asia/Kolkata"
+  }
+]

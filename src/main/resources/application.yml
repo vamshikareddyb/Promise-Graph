@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: promise-graph
+  main:
+    banner-mode: off
+  # The datasource is only used when promisegraph.store=jdbc.
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/promise_graph}
+    username: ${DATABASE_USER:promise}
+    password: ${DATABASE_PASSWORD:promise}
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+promisegraph:
+  tenant: ${PG_TENANT:demo}
+  store: ${PG_STORE:memory}            # memory | jdbc
+  extractor: ${PG_EXTRACTOR:rules}     # rules | llm
+  model: ${PG_MODEL:claude-sonnet-5-5}
+  confidence-threshold: ${PG_CONFIDENCE_THRESHOLD:0.8}
+  llm-max-concurrency: ${PG_LLM_MAX_CONCURRENCY:4}
+  webhook-token: ${PG_WEBHOOK_TOKEN:}
+  temporal:
+    address: ${TEMPORAL_ADDRESS:localhost:7233}
+    namespace: ${TEMPORAL_NAMESPACE:default}
+    worker-enabled: ${PG_WORKER_ENABLED:true}
+  gateway:
+    max-batch: 20
+    max-wait: 30s
+
+server:
+  port: ${PORT:8787}
+
+logging:
+  level:
+    dev.promisegraph: INFO

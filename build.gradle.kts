@@ -1,0 +1,61 @@
+plugins {
+    java
+    id("org.springframework.boot") version "3.5.16"
+    id("io.spring.dependency-management") version "1.1.7"
+}
+
+group = "dev.promisegraph"
+version = "0.1.0"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+val temporalVersion = "1.40.0"
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("io.temporal:temporal-sdk:$temporalVersion")
+    runtimeOnly("org.postgresql:postgresql")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("io.temporal:temporal-testing:$temporalVersion")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+springBoot {
+    mainClass = "dev.promisegraph.PromiseGraphApplication"
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-Xlint:-serial", "-parameters"))
+}
+
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+// Gate 1: fails the build if extraction precision drops below the threshold.
+tasks.register<JavaExec>("evalGate") {
+    group = "verification"
+    description = "Evaluates commitment extraction against the labelled dataset (Gate 1)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "dev.promisegraph.eval.ExtractionEval"
+    args("--min-precision", "0.85")
+}
+
+tasks.named("check") {
+    dependsOn("evalGate")
+}
