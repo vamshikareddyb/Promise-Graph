@@ -1,0 +1,300 @@
+{"id": "core-000", "ts": "2026-11-02T10:05:00+05:30", "channel": "platform", "sender": "neha", "text": "I'll ship the data export API by 13 Nov so analytics can start on the dashboards.", "label": {"kind": "new", "due": "2026-11-13"}}
+{"id": "core-001", "ts": "2026-11-02T10:20:00+05:30", "channel": "analytics", "sender": "meera", "text": "We'll make the schema decision for the export tables by Friday.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0169", "ts": "2026-11-02T10:50:00+05:30", "channel": "platform", "sender": "kabir", "text": "I'll share the Q4 usage numbers by 17 Nov.", "label": {"kind": "new", "due": "2026-11-17"}}
+{"id": "core-002", "ts": "2026-11-02T11:00:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "I will send Acme the usage dashboard walkthrough by 20 Nov.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "core-003", "ts": "2026-11-02T11:30:00+05:30", "channel": "customer-success", "sender": "leela", "text": "Globex asked about exports again. I'll confirm a delivery date with them by tomorrow.", "label": {"kind": "new", "due": "2026-11-03"}}
+{"id": "gen-0244", "ts": "2026-11-02T12:00:00+05:30", "channel": "platform", "sender": "ravi", "text": "I'll migrate the billing tables by Nov 14.", "label": {"kind": "new", "due": "2026-11-14"}}
+{"id": "gen-0273", "ts": "2026-11-02T12:00:00+05:30", "channel": "platform", "sender": "kabir", "text": "I might draft the renewal proposal for Initech if I get time.", "label": {"kind": null, "due": null}}
+{"id": "core-004", "ts": "2026-11-02T12:10:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Can someone from platform share the export field list before Wednesday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0106", "ts": "2026-11-02T12:30:00+05:30", "channel": "platform", "sender": "ravi", "text": "Should we run the churn analysis before Monday?", "label": {"kind": null, "due": null}}
+{"id": "core-005", "ts": "2026-11-02T12:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "I'll share the export field list with analytics by Wednesday.", "label": {"kind": "new", "due": "2026-11-04"}}
+{"id": "gen-0137", "ts": "2026-11-02T13:00:00+05:30", "channel": "analytics", "sender": "dev", "text": "Not sure we can write the release notes by Thursday, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0221", "ts": "2026-11-02T13:20:00+05:30", "channel": "product", "sender": "nikhil", "text": "I'll migrate the billing tables by tomorrow.", "label": {"kind": "new", "due": "2026-11-03"}}
+{"id": "gen-0239", "ts": "2026-11-02T13:20:00+05:30", "channel": "platform", "sender": "sara", "text": "Who owns the decision to write the release notes?", "label": {"kind": null, "due": null}}
+{"id": "core-006", "ts": "2026-11-02T14:00:00+05:30", "channel": "product", "sender": "karan", "text": "I'll finalise the pricing page copy by 12 Nov.", "label": {"kind": "new", "due": "2026-11-12"}}
+{"id": "gen-0188", "ts": "2026-11-02T14:20:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Who owns the decision to write the release notes?", "label": {"kind": null, "due": null}}
+{"id": "core-007", "ts": "2026-11-02T14:30:00+05:30", "channel": "product", "sender": "karan", "text": "I will review the Acme onboarding plan with Tara by Thursday.", "label": {"kind": "new", "due": "2026-11-05"}}
+{"id": "gen-0173", "ts": "2026-11-02T15:10:00+05:30", "channel": "platform", "sender": "sara", "text": "I might record the demo video if I get time.", "label": {"kind": null, "due": null}}
+{"id": "core-008", "ts": "2026-11-02T15:15:00+05:30", "channel": "product", "sender": "zoya", "text": "Maybe we could redo the export settings screen next sprint?", "label": {"kind": null, "due": null}}
+{"id": "gen-0242", "ts": "2026-11-02T15:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "core-009", "ts": "2026-11-02T16:00:00+05:30", "channel": "analytics", "sender": "dev", "text": "I'll build the export ingestion job by 18 Nov, once the API is live.", "label": {"kind": "new", "due": "2026-11-18"}}
+{"id": "gen-0152", "ts": "2026-11-02T16:10:00+05:30", "channel": "platform", "sender": "ravi", "text": "Heads up: my plan to record the demo video will slip to Friday.", "label": {"kind": "slip", "due": "2026-11-06"}}
+{"id": "gen-0035", "ts": "2026-11-02T16:50:00+05:30", "channel": "platform", "sender": "kabir", "text": "Not sure we can fix the CSV export bug by Nov 10, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0060", "ts": "2026-11-02T17:30:00+05:30", "channel": "platform", "sender": "neha", "text": "Done: sent the pricing deck.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0166", "ts": "2026-11-03T09:00:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "I'll fix the CSV export bug by Friday.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0004", "ts": "2026-11-03T09:40:00+05:30", "channel": "product", "sender": "nikhil", "text": "I'll record the demo video.", "label": {"kind": "new", "due": null}}
+{"id": "core-010", "ts": "2026-11-03T09:45:00+05:30", "channel": "customer-success", "sender": "leela", "text": "Done: confirmed the delivery date with Globex.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0114", "ts": "2026-11-03T10:00:00+05:30", "channel": "platform", "sender": "neha", "text": "Heads up: my plan to fix the CSV export bug will slip to Thursday.", "label": {"kind": "slip", "due": "2026-11-05"}}
+{"id": "core-011", "ts": "2026-11-03T10:30:00+05:30", "channel": "platform", "sender": "ravi", "text": "Neha, can you keep the API backwards compatible?", "label": {"kind": null, "due": null}}
+{"id": "gen-0138", "ts": "2026-11-03T10:30:00+05:30", "channel": "analytics", "sender": "dev", "text": "I've drafted the renewal proposal for Initech.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0247", "ts": "2026-11-03T10:30:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I'll prepare the board metrics by tomorrow.", "label": {"kind": "new", "due": "2026-11-04"}}
+{"id": "gen-0069", "ts": "2026-11-03T10:40:00+05:30", "channel": "product", "sender": "nikhil", "text": "I will set up the staging cluster by tomorrow.", "label": {"kind": "new", "due": "2026-11-04"}}
+{"id": "gen-0172", "ts": "2026-11-03T11:00:00+05:30", "channel": "platform", "sender": "neha", "text": "I need to push the deadline to run the churn analysis to tomorrow.", "label": {"kind": "slip", "due": "2026-11-04"}}
+{"id": "gen-0079", "ts": "2026-11-03T12:50:00+05:30", "channel": "product", "sender": "aditi", "text": "Who owns the decision to draft the renewal proposal for Initech?", "label": {"kind": null, "due": null}}
+{"id": "gen-0270", "ts": "2026-11-03T12:50:00+05:30", "channel": "product", "sender": "aditi", "text": "I'll review the API spec by end of the week.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0074", "ts": "2026-11-03T13:00:00+05:30", "channel": "product", "sender": "zoya", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0053", "ts": "2026-11-03T13:30:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0064", "ts": "2026-11-03T13:40:00+05:30", "channel": "analytics", "sender": "meera", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0002", "ts": "2026-11-03T15:00:00+05:30", "channel": "product", "sender": "nikhil", "text": "We'll run the churn analysis by next week.", "label": {"kind": "new", "due": "2026-11-13"}}
+{"id": "gen-0127", "ts": "2026-11-03T15:00:00+05:30", "channel": "platform", "sender": "arjun", "text": "Done: drafted the renewal proposal for Initech.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0073", "ts": "2026-11-03T15:30:00+05:30", "channel": "platform", "sender": "ravi", "text": "I'll fix the CSV export bug.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0165", "ts": "2026-11-03T15:40:00+05:30", "channel": "platform", "sender": "ravi", "text": "We'll share the Q4 usage numbers by end of the week.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0226", "ts": "2026-11-03T16:10:00+05:30", "channel": "product", "sender": "zoya", "text": "Did anyone draft the renewal proposal for Initech yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0133", "ts": "2026-11-03T16:20:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I need to push the deadline to review the API spec to tomorrow.", "label": {"kind": "slip", "due": "2026-11-04"}}
+{"id": "gen-0161", "ts": "2026-11-03T17:40:00+05:30", "channel": "product", "sender": "karan", "text": "Tara said they would migrate the billing tables.", "label": {"kind": null, "due": null}}
+{"id": "gen-0235", "ts": "2026-11-03T17:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "I've set up the staging cluster.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0269", "ts": "2026-11-03T17:50:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "We need to run the churn analysis by tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0021", "ts": "2026-11-04T09:00:00+05:30", "channel": "analytics", "sender": "dev", "text": "Sure, I can share the Q4 usage numbers by Friday.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0243", "ts": "2026-11-04T09:30:00+05:30", "channel": "platform", "sender": "sara", "text": "I will migrate the billing tables by Friday.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0012", "ts": "2026-11-04T09:50:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I need to push the deadline to review the API spec to Monday.", "label": {"kind": "slip", "due": "2026-11-09"}}
+{"id": "gen-0003", "ts": "2026-11-04T10:10:00+05:30", "channel": "analytics", "sender": "ananya", "text": "On it. I'll run the churn analysis before Thursday.", "label": {"kind": "new", "due": "2026-11-05"}}
+{"id": "gen-0078", "ts": "2026-11-04T11:00:00+05:30", "channel": "analytics", "sender": "dev", "text": "I will record the demo video this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "core-012", "ts": "2026-11-04T11:10:00+05:30", "channel": "platform", "sender": "arjun", "text": "Done: shared the export field list with analytics.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0034", "ts": "2026-11-04T11:10:00+05:30", "channel": "customer-success", "sender": "priya", "text": "I need to push the deadline to prepare the board metrics to Thursday.", "label": {"kind": "slip", "due": "2026-11-05"}}
+{"id": "gen-0144", "ts": "2026-11-04T11:20:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I might record the demo video if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0179", "ts": "2026-11-04T12:10:00+05:30", "channel": "analytics", "sender": "dev", "text": "I will run the churn analysis by tomorrow.", "label": {"kind": "new", "due": "2026-11-05"}}
+{"id": "gen-0117", "ts": "2026-11-04T12:30:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Sara said they would write the release notes.", "label": {"kind": null, "due": null}}
+{"id": "gen-0126", "ts": "2026-11-04T12:30:00+05:30", "channel": "product", "sender": "ritu", "text": "I'll run the churn analysis.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0260", "ts": "2026-11-04T14:30:00+05:30", "channel": "analytics", "sender": "dev", "text": "On it. I'll fix the CSV export bug before 19 Nov.", "label": {"kind": "new", "due": "2026-11-19"}}
+{"id": "gen-0220", "ts": "2026-11-04T14:50:00+05:30", "channel": "platform", "sender": "neha", "text": "Kabir said they would record the demo video.", "label": {"kind": null, "due": null}}
+{"id": "gen-0075", "ts": "2026-11-04T17:00:00+05:30", "channel": "customer-success", "sender": "tara", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0175", "ts": "2026-11-04T17:00:00+05:30", "channel": "analytics", "sender": "isha", "text": "We'll update the onboarding doc by Nov 16.", "label": {"kind": "new", "due": "2026-11-16"}}
+{"id": "gen-0262", "ts": "2026-11-04T17:40:00+05:30", "channel": "customer-success", "sender": "tara", "text": "We need to fix the CSV export bug by Wednesday.", "label": {"kind": null, "due": null}}
+{"id": "gen-0183", "ts": "2026-11-05T09:00:00+05:30", "channel": "platform", "sender": "ravi", "text": "I might review the API spec if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0230", "ts": "2026-11-05T09:10:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Done: run the churn analysis.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0024", "ts": "2026-11-05T10:10:00+05:30", "channel": "platform", "sender": "sara", "text": "I've drafted the renewal proposal for Initech.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0089", "ts": "2026-11-05T12:20:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I will send the pricing deck by Nov 17.", "label": {"kind": "new", "due": "2026-11-17"}}
+{"id": "gen-0263", "ts": "2026-11-05T12:20:00+05:30", "channel": "platform", "sender": "ravi", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0190", "ts": "2026-11-05T12:50:00+05:30", "channel": "product", "sender": "karan", "text": "Not sure we can write the release notes by Friday, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0222", "ts": "2026-11-05T14:10:00+05:30", "channel": "product", "sender": "ritu", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0194", "ts": "2026-11-05T14:20:00+05:30", "channel": "analytics", "sender": "meera", "text": "Done: migrated the billing tables.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0207", "ts": "2026-11-05T15:10:00+05:30", "channel": "analytics", "sender": "meera", "text": "I'll draft the renewal proposal for Initech by Thursday.", "label": {"kind": "new", "due": "2026-11-05"}}
+{"id": "gen-0150", "ts": "2026-11-05T15:20:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Heads up: my plan to set up the staging cluster will slip to Nov 13.", "label": {"kind": "slip", "due": "2026-11-13"}}
+{"id": "core-013", "ts": "2026-11-05T17:20:00+05:30", "channel": "product", "sender": "karan", "text": "I've reviewed the Acme onboarding plan with Tara.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0006", "ts": "2026-11-05T17:50:00+05:30", "channel": "analytics", "sender": "meera", "text": "Maybe we could record the demo video Nov 13?", "label": {"kind": null, "due": null}}
+{"id": "gen-0184", "ts": "2026-11-06T09:00:00+05:30", "channel": "platform", "sender": "neha", "text": "Who owns the decision to prepare the board metrics?", "label": {"kind": null, "due": null}}
+{"id": "gen-0001", "ts": "2026-11-06T10:20:00+05:30", "channel": "customer-success", "sender": "priya", "text": "On it. I'll set up the staging cluster before Nov 18.", "label": {"kind": "new", "due": "2026-11-18"}}
+{"id": "gen-0261", "ts": "2026-11-06T10:20:00+05:30", "channel": "product", "sender": "karan", "text": "Should we share the Q4 usage numbers before tomorrow?", "label": {"kind": null, "due": null}}
+{"id": "gen-0048", "ts": "2026-11-06T10:30:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Who owns the decision to update the onboarding doc?", "label": {"kind": null, "due": null}}
+{"id": "gen-0036", "ts": "2026-11-06T10:40:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "I'll run the churn analysis by 11 Nov.", "label": {"kind": "new", "due": "2026-11-11"}}
+{"id": "gen-0040", "ts": "2026-11-06T11:40:00+05:30", "channel": "product", "sender": "zoya", "text": "We'll run the churn analysis by 11 Nov.", "label": {"kind": "new", "due": "2026-11-11"}}
+{"id": "gen-0083", "ts": "2026-11-06T11:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "Sure, I can prepare the board metrics by 11 Nov.", "label": {"kind": "new", "due": "2026-11-11"}}
+{"id": "gen-0163", "ts": "2026-11-06T11:40:00+05:30", "channel": "product", "sender": "nikhil", "text": "Did anyone write the release notes yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0187", "ts": "2026-11-06T14:30:00+05:30", "channel": "platform", "sender": "sara", "text": "Sure, I can review the API spec by Nov 18.", "label": {"kind": "new", "due": "2026-11-18"}}
+{"id": "gen-0070", "ts": "2026-11-06T14:50:00+05:30", "channel": "product", "sender": "karan", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0146", "ts": "2026-11-06T15:00:00+05:30", "channel": "analytics", "sender": "isha", "text": "On it. I'll send the pricing deck before Friday.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0139", "ts": "2026-11-06T15:50:00+05:30", "channel": "product", "sender": "zoya", "text": "I will migrate the billing tables by 11 Nov.", "label": {"kind": "new", "due": "2026-11-11"}}
+{"id": "core-014", "ts": "2026-11-06T16:00:00+05:30", "channel": "analytics", "sender": "meera", "text": "The schema decision will slip to 11 Nov, we're waiting on platform's field types.", "label": {"kind": "slip", "due": "2026-11-11"}}
+{"id": "gen-0125", "ts": "2026-11-06T16:20:00+05:30", "channel": "analytics", "sender": "isha", "text": "I will record the demo video this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0246", "ts": "2026-11-06T16:30:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "On it. I'll prepare the board metrics before EOD.", "label": {"kind": "new", "due": "2026-11-06"}}
+{"id": "gen-0231", "ts": "2026-11-06T16:40:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Should we write the release notes before EOD?", "label": {"kind": null, "due": null}}
+{"id": "gen-0041", "ts": "2026-11-06T17:00:00+05:30", "channel": "platform", "sender": "ravi", "text": "I need to push the deadline to fix the CSV export bug to end of the week.", "label": {"kind": "slip", "due": "2026-11-06"}}
+{"id": "gen-0071", "ts": "2026-11-06T17:50:00+05:30", "channel": "product", "sender": "aditi", "text": "Can someone update the onboarding doc by 21 Nov?", "label": {"kind": null, "due": null}}
+{"id": "gen-0268", "ts": "2026-11-09T09:20:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I might write the release notes if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0229", "ts": "2026-11-09T09:50:00+05:30", "channel": "platform", "sender": "arjun", "text": "Can someone migrate the billing tables by Wednesday?", "label": {"kind": null, "due": null}}
+{"id": "core-015", "ts": "2026-11-09T10:00:00+05:30", "channel": "product", "sender": "karan", "text": "Heads up, I'm on leave from 16 Nov to 27 Nov.", "label": {"kind": null, "due": null}}
+{"id": "gen-0055", "ts": "2026-11-09T10:20:00+05:30", "channel": "platform", "sender": "neha", "text": "I'll set up the staging cluster by EOD.", "label": {"kind": "new", "due": "2026-11-09"}}
+{"id": "gen-0202", "ts": "2026-11-09T11:20:00+05:30", "channel": "platform", "sender": "sara", "text": "I will migrate the billing tables by EOD.", "label": {"kind": "new", "due": "2026-11-09"}}
+{"id": "core-016", "ts": "2026-11-09T11:30:00+05:30", "channel": "product", "sender": "karan", "text": "I'll write the launch FAQ for support by 19 Nov.", "label": {"kind": "new", "due": "2026-11-19"}}
+{"id": "gen-0085", "ts": "2026-11-09T11:30:00+05:30", "channel": "platform", "sender": "ravi", "text": "We need to send the pricing deck by Friday.", "label": {"kind": null, "due": null}}
+{"id": "gen-0160", "ts": "2026-11-09T13:00:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I might migrate the billing tables if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0067", "ts": "2026-11-09T13:40:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "I will send the pricing deck this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0250", "ts": "2026-11-09T13:40:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Heads up: my plan to migrate the billing tables will slip to Thursday.", "label": {"kind": "slip", "due": "2026-11-12"}}
+{"id": "gen-0208", "ts": "2026-11-09T15:40:00+05:30", "channel": "customer-success", "sender": "leela", "text": "Done: updated the onboarding doc.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0145", "ts": "2026-11-09T16:10:00+05:30", "channel": "analytics", "sender": "isha", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0147", "ts": "2026-11-09T16:10:00+05:30", "channel": "product", "sender": "ritu", "text": "Did anyone migrate the billing tables yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0210", "ts": "2026-11-09T16:40:00+05:30", "channel": "analytics", "sender": "dev", "text": "Done: prepared the board metrics.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0049", "ts": "2026-11-09T17:30:00+05:30", "channel": "product", "sender": "aditi", "text": "We'll migrate the billing tables by next week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0129", "ts": "2026-11-09T17:50:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I need to push the deadline to share the Q4 usage numbers to end of the week.", "label": {"kind": "slip", "due": "2026-11-13"}}
+{"id": "gen-0029", "ts": "2026-11-10T09:20:00+05:30", "channel": "analytics", "sender": "ananya", "text": "I'll run the churn analysis.", "label": {"kind": "new", "due": null}}
+{"id": "core-017", "ts": "2026-11-10T09:30:00+05:30", "channel": "platform", "sender": "neha", "text": "The data export API will slip by two weeks, the auth changes took longer than planned.", "label": {"kind": "slip", "due": "2026-11-27"}}
+{"id": "gen-0265", "ts": "2026-11-10T09:40:00+05:30", "channel": "customer-success", "sender": "priya", "text": "I'll fix the CSV export bug by Thursday.", "label": {"kind": "new", "due": "2026-11-12"}}
+{"id": "core-018", "ts": "2026-11-10T09:50:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Did that push the Acme walkthrough too?", "label": {"kind": null, "due": null}}
+{"id": "core-019", "ts": "2026-11-10T10:15:00+05:30", "channel": "analytics", "sender": "meera", "text": "Done: schema decision is made and posted in the doc.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0142", "ts": "2026-11-10T10:30:00+05:30", "channel": "customer-success", "sender": "leela", "text": "Maybe we could send the pricing deck Thursday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0182", "ts": "2026-11-10T11:00:00+05:30", "channel": "analytics", "sender": "isha", "text": "I might set up the staging cluster if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0110", "ts": "2026-11-10T12:30:00+05:30", "channel": "customer-success", "sender": "leela", "text": "Maybe we could send the pricing deck Monday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0108", "ts": "2026-11-10T12:50:00+05:30", "channel": "platform", "sender": "ravi", "text": "We need to draft the renewal proposal for Initech by Nov 22.", "label": {"kind": null, "due": null}}
+{"id": "gen-0186", "ts": "2026-11-10T13:30:00+05:30", "channel": "analytics", "sender": "ananya", "text": "I'll share the Q4 usage numbers by EOD.", "label": {"kind": "new", "due": "2026-11-10"}}
+{"id": "gen-0087", "ts": "2026-11-10T14:00:00+05:30", "channel": "platform", "sender": "sara", "text": "We need to prepare the board metrics by tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0148", "ts": "2026-11-10T14:00:00+05:30", "channel": "product", "sender": "nikhil", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0212", "ts": "2026-11-10T14:50:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I'll migrate the billing tables.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0081", "ts": "2026-11-10T16:00:00+05:30", "channel": "product", "sender": "zoya", "text": "We need to update the onboarding doc by EOD.", "label": {"kind": null, "due": null}}
+{"id": "gen-0046", "ts": "2026-11-10T16:20:00+05:30", "channel": "product", "sender": "zoya", "text": "Heads up: my plan to draft the renewal proposal for Initech will slip to end of the week.", "label": {"kind": "slip", "due": "2026-11-13"}}
+{"id": "gen-0091", "ts": "2026-11-10T16:40:00+05:30", "channel": "product", "sender": "zoya", "text": "We'll prepare the board metrics by EOD.", "label": {"kind": "new", "due": "2026-11-10"}}
+{"id": "gen-0224", "ts": "2026-11-10T16:50:00+05:30", "channel": "analytics", "sender": "isha", "text": "I'll draft the renewal proposal for Initech by 25 Nov.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0043", "ts": "2026-11-10T17:00:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0232", "ts": "2026-11-10T17:00:00+05:30", "channel": "product", "sender": "zoya", "text": "I will update the onboarding doc this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0180", "ts": "2026-11-10T17:30:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0149", "ts": "2026-11-11T09:50:00+05:30", "channel": "platform", "sender": "kabir", "text": "On it. I'll prepare the board metrics before next week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0047", "ts": "2026-11-11T10:10:00+05:30", "channel": "platform", "sender": "arjun", "text": "Sure, I can set up the staging cluster by EOD.", "label": {"kind": "new", "due": "2026-11-11"}}
+{"id": "gen-0015", "ts": "2026-11-11T11:30:00+05:30", "channel": "platform", "sender": "kabir", "text": "Maybe we could set up the staging cluster Thursday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0068", "ts": "2026-11-11T11:30:00+05:30", "channel": "analytics", "sender": "dev", "text": "I'll run the churn analysis by tomorrow.", "label": {"kind": "new", "due": "2026-11-12"}}
+{"id": "core-020", "ts": "2026-11-11T12:00:00+05:30", "channel": "platform", "sender": "neha", "text": "I can ship a partial export with the core fields by 20 Nov.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0017", "ts": "2026-11-11T12:00:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I will fix the CSV export bug by EOD.", "label": {"kind": "new", "due": "2026-11-11"}}
+{"id": "gen-0131", "ts": "2026-11-11T12:20:00+05:30", "channel": "customer-success", "sender": "tara", "text": "Sure, I can fix the CSV export bug by next week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0031", "ts": "2026-11-11T12:30:00+05:30", "channel": "platform", "sender": "arjun", "text": "Heads up: my plan to review the API spec will slip to next week.", "label": {"kind": "slip", "due": "2026-11-20"}}
+{"id": "gen-0107", "ts": "2026-11-11T13:00:00+05:30", "channel": "product", "sender": "karan", "text": "We'll run the churn analysis by next week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0216", "ts": "2026-11-11T13:40:00+05:30", "channel": "product", "sender": "zoya", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0157", "ts": "2026-11-11T14:40:00+05:30", "channel": "analytics", "sender": "meera", "text": "I might review the API spec if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0097", "ts": "2026-11-11T15:30:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Can someone write the release notes by Monday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0120", "ts": "2026-11-11T16:00:00+05:30", "channel": "customer-success", "sender": "omar", "text": "I'll migrate the billing tables by Thursday.", "label": {"kind": "new", "due": "2026-11-12"}}
+{"id": "gen-0151", "ts": "2026-11-11T16:10:00+05:30", "channel": "product", "sender": "nikhil", "text": "Tara said they would set up the staging cluster.", "label": {"kind": null, "due": null}}
+{"id": "gen-0276", "ts": "2026-11-11T17:10:00+05:30", "channel": "customer-success", "sender": "priya", "text": "We'll prepare the board metrics by tomorrow.", "label": {"kind": "new", "due": "2026-11-12"}}
+{"id": "gen-0213", "ts": "2026-11-12T10:30:00+05:30", "channel": "platform", "sender": "neha", "text": "I'll update the onboarding doc.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0259", "ts": "2026-11-12T12:10:00+05:30", "channel": "product", "sender": "karan", "text": "I need to push the deadline to run the churn analysis to Wednesday.", "label": {"kind": "slip", "due": "2026-11-18"}}
+{"id": "gen-0196", "ts": "2026-11-12T12:30:00+05:30", "channel": "analytics", "sender": "isha", "text": "I've set up the staging cluster.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0076", "ts": "2026-11-12T12:50:00+05:30", "channel": "product", "sender": "aditi", "text": "I will review the API spec by Monday.", "label": {"kind": "new", "due": "2026-11-16"}}
+{"id": "gen-0058", "ts": "2026-11-12T13:40:00+05:30", "channel": "analytics", "sender": "meera", "text": "Sure, I can send the pricing deck by end of the week.", "label": {"kind": "new", "due": "2026-11-13"}}
+{"id": "gen-0177", "ts": "2026-11-12T13:50:00+05:30", "channel": "platform", "sender": "sara", "text": "Sure, I can share the Q4 usage numbers by Nov 24.", "label": {"kind": "new", "due": "2026-11-24"}}
+{"id": "gen-0178", "ts": "2026-11-12T13:50:00+05:30", "channel": "platform", "sender": "neha", "text": "We need to migrate the billing tables by 17 Nov.", "label": {"kind": null, "due": null}}
+{"id": "gen-0030", "ts": "2026-11-12T14:20:00+05:30", "channel": "product", "sender": "aditi", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0121", "ts": "2026-11-12T14:20:00+05:30", "channel": "platform", "sender": "neha", "text": "On it. I'll share the Q4 usage numbers before 27 Nov.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0162", "ts": "2026-11-12T15:20:00+05:30", "channel": "platform", "sender": "sara", "text": "We need to run the churn analysis by Nov 24.", "label": {"kind": null, "due": null}}
+{"id": "gen-0084", "ts": "2026-11-12T16:30:00+05:30", "channel": "product", "sender": "karan", "text": "I will review the API spec this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0128", "ts": "2026-11-12T16:50:00+05:30", "channel": "platform", "sender": "arjun", "text": "We'll record the demo video by EOD.", "label": {"kind": "new", "due": "2026-11-12"}}
+{"id": "gen-0255", "ts": "2026-11-12T17:00:00+05:30", "channel": "platform", "sender": "kabir", "text": "Should we run the churn analysis before Nov 24?", "label": {"kind": null, "due": null}}
+{"id": "gen-0170", "ts": "2026-11-12T17:20:00+05:30", "channel": "platform", "sender": "kabir", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0027", "ts": "2026-11-12T17:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "Did anyone run the churn analysis yet?", "label": {"kind": null, "due": null}}
+{"id": "core-021", "ts": "2026-11-12T18:30:00+05:30", "channel": "product", "sender": "karan", "text": "Done: pricing page copy is finalised and with design.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0251", "ts": "2026-11-13T09:10:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Should we update the onboarding doc before tomorrow?", "label": {"kind": null, "due": null}}
+{"id": "gen-0059", "ts": "2026-11-13T09:20:00+05:30", "channel": "analytics", "sender": "dev", "text": "Should we draft the renewal proposal for Initech before 18 Nov?", "label": {"kind": null, "due": null}}
+{"id": "gen-0248", "ts": "2026-11-13T09:20:00+05:30", "channel": "analytics", "sender": "isha", "text": "We'll prepare the board metrics by Nov 21.", "label": {"kind": "new", "due": "2026-11-21"}}
+{"id": "core-022", "ts": "2026-11-13T10:00:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Thanks all, the support macros look great.", "label": {"kind": null, "due": null}}
+{"id": "gen-0009", "ts": "2026-11-13T10:00:00+05:30", "channel": "product", "sender": "nikhil", "text": "We need to run the churn analysis by Friday.", "label": {"kind": null, "due": null}}
+{"id": "gen-0104", "ts": "2026-11-13T10:00:00+05:30", "channel": "platform", "sender": "neha", "text": "We'll fix the CSV export bug by Nov 25.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0094", "ts": "2026-11-13T11:00:00+05:30", "channel": "analytics", "sender": "ananya", "text": "I might draft the renewal proposal for Initech if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0092", "ts": "2026-11-13T11:30:00+05:30", "channel": "platform", "sender": "kabir", "text": "I might draft the renewal proposal for Initech if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0134", "ts": "2026-11-13T12:00:00+05:30", "channel": "platform", "sender": "neha", "text": "On it. I'll share the Q4 usage numbers before EOD.", "label": {"kind": "new", "due": "2026-11-13"}}
+{"id": "gen-0118", "ts": "2026-11-13T12:20:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "We'll set up the staging cluster by EOD.", "label": {"kind": "new", "due": "2026-11-13"}}
+{"id": "gen-0105", "ts": "2026-11-13T12:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "Sure, I can run the churn analysis by Nov 21.", "label": {"kind": "new", "due": "2026-11-21"}}
+{"id": "gen-0200", "ts": "2026-11-13T12:50:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I will prepare the board metrics by Nov 21.", "label": {"kind": "new", "due": "2026-11-21"}}
+{"id": "gen-0111", "ts": "2026-11-13T13:00:00+05:30", "channel": "analytics", "sender": "dev", "text": "Heads up: my plan to share the Q4 usage numbers will slip to next week.", "label": {"kind": "slip", "due": "2026-11-20"}}
+{"id": "gen-0130", "ts": "2026-11-13T13:10:00+05:30", "channel": "platform", "sender": "sara", "text": "We need to update the onboarding doc by Monday.", "label": {"kind": null, "due": null}}
+{"id": "gen-0164", "ts": "2026-11-13T14:50:00+05:30", "channel": "platform", "sender": "neha", "text": "On it. I'll run the churn analysis before Monday.", "label": {"kind": "new", "due": "2026-11-16"}}
+{"id": "core-023", "ts": "2026-11-13T15:40:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Should we add region to the export?", "label": {"kind": null, "due": null}}
+{"id": "gen-0252", "ts": "2026-11-13T15:50:00+05:30", "channel": "product", "sender": "ritu", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0065", "ts": "2026-11-13T16:00:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Sure, I can send the pricing deck by Friday.", "label": {"kind": "new", "due": "2026-11-13"}}
+{"id": "gen-0080", "ts": "2026-11-13T16:00:00+05:30", "channel": "product", "sender": "aditi", "text": "We'll prepare the board metrics by 18 Nov.", "label": {"kind": "new", "due": "2026-11-18"}}
+{"id": "gen-0233", "ts": "2026-11-13T17:20:00+05:30", "channel": "analytics", "sender": "isha", "text": "Heads up: my plan to write the release notes will slip to Friday.", "label": {"kind": "slip", "due": "2026-11-13"}}
+{"id": "gen-0005", "ts": "2026-11-13T17:50:00+05:30", "channel": "platform", "sender": "kabir", "text": "I've set up the staging cluster.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0122", "ts": "2026-11-16T13:20:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Sure, I can record the demo video by tomorrow.", "label": {"kind": "new", "due": "2026-11-17"}}
+{"id": "gen-0209", "ts": "2026-11-16T13:40:00+05:30", "channel": "analytics", "sender": "meera", "text": "Can someone send the pricing deck by Thursday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0028", "ts": "2026-11-16T15:50:00+05:30", "channel": "product", "sender": "karan", "text": "Did anyone migrate the billing tables yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0093", "ts": "2026-11-16T15:50:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Sure, I can update the onboarding doc by Monday.", "label": {"kind": "new", "due": "2026-11-16"}}
+{"id": "gen-0115", "ts": "2026-11-16T16:00:00+05:30", "channel": "analytics", "sender": "meera", "text": "Who owns the decision to share the Q4 usage numbers?", "label": {"kind": null, "due": null}}
+{"id": "gen-0025", "ts": "2026-11-16T17:00:00+05:30", "channel": "platform", "sender": "sara", "text": "I need to push the deadline to prepare the board metrics to Monday.", "label": {"kind": "slip", "due": "2026-11-16"}}
+{"id": "gen-0136", "ts": "2026-11-17T09:40:00+05:30", "channel": "platform", "sender": "neha", "text": "Sure, I can write the release notes by end of the week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0274", "ts": "2026-11-17T09:50:00+05:30", "channel": "product", "sender": "ritu", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0099", "ts": "2026-11-17T10:20:00+05:30", "channel": "product", "sender": "nikhil", "text": "Done: fixed the CSV export bug.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0014", "ts": "2026-11-17T12:20:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I'll fix the CSV export bug by Nov 25.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0141", "ts": "2026-11-17T12:30:00+05:30", "channel": "product", "sender": "nikhil", "text": "Sure, I can set up the staging cluster by Thursday.", "label": {"kind": "new", "due": "2026-11-19"}}
+{"id": "gen-0066", "ts": "2026-11-17T13:10:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I'll write the release notes.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0185", "ts": "2026-11-17T15:00:00+05:30", "channel": "product", "sender": "nikhil", "text": "Who owns the decision to share the Q4 usage numbers?", "label": {"kind": null, "due": null}}
+{"id": "gen-0109", "ts": "2026-11-17T15:20:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Sure, I can share the Q4 usage numbers by Friday.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0214", "ts": "2026-11-17T15:40:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Sure, I can record the demo video by Monday.", "label": {"kind": "new", "due": "2026-11-23"}}
+{"id": "gen-0192", "ts": "2026-11-17T16:40:00+05:30", "channel": "platform", "sender": "ravi", "text": "Done: drafted the renewal proposal for Initech.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0143", "ts": "2026-11-17T17:10:00+05:30", "channel": "product", "sender": "nikhil", "text": "I'll draft the renewal proposal for Initech by end of the week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0116", "ts": "2026-11-18T09:00:00+05:30", "channel": "analytics", "sender": "isha", "text": "I need to push the deadline to write the release notes to Wednesday.", "label": {"kind": "slip", "due": "2026-11-18"}}
+{"id": "gen-0100", "ts": "2026-11-18T09:10:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Heads up: my plan to set up the staging cluster will slip to Nov 30.", "label": {"kind": "slip", "due": "2026-11-30"}}
+{"id": "gen-0257", "ts": "2026-11-18T09:30:00+05:30", "channel": "platform", "sender": "neha", "text": "Sure, I can draft the renewal proposal for Initech by 3 Dec.", "label": {"kind": "new", "due": "2026-12-03"}}
+{"id": "gen-0132", "ts": "2026-11-18T10:50:00+05:30", "channel": "platform", "sender": "arjun", "text": "Done: updated the onboarding doc.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0124", "ts": "2026-11-18T11:00:00+05:30", "channel": "customer-success", "sender": "tara", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0113", "ts": "2026-11-18T11:30:00+05:30", "channel": "platform", "sender": "kabir", "text": "On it. I'll send the pricing deck before next week.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0215", "ts": "2026-11-18T12:30:00+05:30", "channel": "analytics", "sender": "ananya", "text": "I'll draft the renewal proposal for Initech by next week.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0088", "ts": "2026-11-18T13:00:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I will record the demo video this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0063", "ts": "2026-11-18T13:30:00+05:30", "channel": "platform", "sender": "kabir", "text": "Maybe we could write the release notes tomorrow?", "label": {"kind": null, "due": null}}
+{"id": "gen-0153", "ts": "2026-11-18T14:00:00+05:30", "channel": "product", "sender": "aditi", "text": "We'll review the API spec by EOD.", "label": {"kind": "new", "due": "2026-11-18"}}
+{"id": "gen-0195", "ts": "2026-11-18T14:10:00+05:30", "channel": "platform", "sender": "sara", "text": "I'll set up the staging cluster by 3 Dec.", "label": {"kind": "new", "due": "2026-12-03"}}
+{"id": "gen-0086", "ts": "2026-11-18T14:30:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Should we write the release notes before EOD?", "label": {"kind": null, "due": null}}
+{"id": "gen-0020", "ts": "2026-11-18T15:00:00+05:30", "channel": "product", "sender": "zoya", "text": "I will set up the staging cluster this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0033", "ts": "2026-11-18T15:50:00+05:30", "channel": "platform", "sender": "sara", "text": "I need to push the deadline to prepare the board metrics to next week.", "label": {"kind": "slip", "due": "2026-11-27"}}
+{"id": "gen-0272", "ts": "2026-11-18T16:10:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Done: reviewed the API spec.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0236", "ts": "2026-11-18T16:40:00+05:30", "channel": "platform", "sender": "neha", "text": "I will update the onboarding doc by EOD.", "label": {"kind": "new", "due": "2026-11-18"}}
+{"id": "gen-0223", "ts": "2026-11-18T17:50:00+05:30", "channel": "analytics", "sender": "dev", "text": "Maybe we could run the churn analysis end of the week?", "label": {"kind": null, "due": null}}
+{"id": "gen-0050", "ts": "2026-11-19T09:20:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Sure, I can share the Q4 usage numbers by Wednesday.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0240", "ts": "2026-11-19T09:30:00+05:30", "channel": "analytics", "sender": "meera", "text": "On it. I'll send the pricing deck before Wednesday.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0101", "ts": "2026-11-19T10:30:00+05:30", "channel": "platform", "sender": "neha", "text": "Can someone prepare the board metrics by Friday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0176", "ts": "2026-11-19T11:10:00+05:30", "channel": "customer-success", "sender": "leela", "text": "We'll prepare the board metrics by Friday.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0254", "ts": "2026-11-19T11:40:00+05:30", "channel": "analytics", "sender": "rahul", "text": "We need to fix the CSV export bug by Nov 27.", "label": {"kind": null, "due": null}}
+{"id": "gen-0206", "ts": "2026-11-19T12:50:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Did anyone prepare the board metrics yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0264", "ts": "2026-11-19T13:00:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I might review the API spec if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0203", "ts": "2026-11-19T13:10:00+05:30", "channel": "analytics", "sender": "isha", "text": "I'll update the onboarding doc by next week.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0037", "ts": "2026-11-19T13:40:00+05:30", "channel": "platform", "sender": "kabir", "text": "I will share the Q4 usage numbers by next week.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0140", "ts": "2026-11-19T13:50:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I'll update the onboarding doc by Dec 1.", "label": {"kind": "new", "due": "2026-12-01"}}
+{"id": "gen-0010", "ts": "2026-11-19T15:00:00+05:30", "channel": "product", "sender": "karan", "text": "We'll fix the CSV export bug by Wednesday.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0238", "ts": "2026-11-20T09:30:00+05:30", "channel": "platform", "sender": "neha", "text": "I will migrate the billing tables by end of the week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0119", "ts": "2026-11-20T09:50:00+05:30", "channel": "product", "sender": "zoya", "text": "I will share the Q4 usage numbers this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0205", "ts": "2026-11-20T09:50:00+05:30", "channel": "analytics", "sender": "isha", "text": "We'll send the pricing deck by end of the week.", "label": {"kind": "new", "due": "2026-11-20"}}
+{"id": "gen-0266", "ts": "2026-11-20T10:20:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Maybe we could draft the renewal proposal for Initech EOD?", "label": {"kind": null, "due": null}}
+{"id": "gen-0082", "ts": "2026-11-20T10:40:00+05:30", "channel": "product", "sender": "karan", "text": "I will update the onboarding doc by Thursday.", "label": {"kind": "new", "due": "2026-11-26"}}
+{"id": "gen-0102", "ts": "2026-11-20T11:40:00+05:30", "channel": "product", "sender": "karan", "text": "I might draft the renewal proposal for Initech if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0103", "ts": "2026-11-20T12:40:00+05:30", "channel": "platform", "sender": "sara", "text": "I might review the API spec if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0158", "ts": "2026-11-20T12:40:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I've fixed the CSV export bug.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0204", "ts": "2026-11-20T12:40:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I will send the pricing deck this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0044", "ts": "2026-11-20T12:50:00+05:30", "channel": "platform", "sender": "arjun", "text": "Ritu said they would write the release notes.", "label": {"kind": null, "due": null}}
+{"id": "gen-0275", "ts": "2026-11-20T14:10:00+05:30", "channel": "platform", "sender": "arjun", "text": "Maybe we could write the release notes Wednesday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0061", "ts": "2026-11-20T16:40:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0198", "ts": "2026-11-20T16:50:00+05:30", "channel": "platform", "sender": "kabir", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0039", "ts": "2026-11-20T17:10:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0045", "ts": "2026-11-20T17:20:00+05:30", "channel": "analytics", "sender": "rahul", "text": "Did anyone run the churn analysis yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0051", "ts": "2026-11-20T17:40:00+05:30", "channel": "product", "sender": "zoya", "text": "Sure, I can draft the renewal proposal for Initech by 5 Dec.", "label": {"kind": "new", "due": "2026-12-05"}}
+{"id": "gen-0077", "ts": "2026-11-23T09:40:00+05:30", "channel": "customer-success", "sender": "tara", "text": "Heads up: my plan to set up the staging cluster will slip to EOD.", "label": {"kind": "slip", "due": "2026-11-23"}}
+{"id": "gen-0112", "ts": "2026-11-23T09:40:00+05:30", "channel": "product", "sender": "ritu", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0245", "ts": "2026-11-23T11:00:00+05:30", "channel": "platform", "sender": "kabir", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0234", "ts": "2026-11-23T11:40:00+05:30", "channel": "analytics", "sender": "dev", "text": "Sure, I can review the API spec by Wednesday.", "label": {"kind": "new", "due": "2026-11-25"}}
+{"id": "gen-0218", "ts": "2026-11-23T13:20:00+05:30", "channel": "analytics", "sender": "meera", "text": "Did anyone send the pricing deck yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0217", "ts": "2026-11-23T13:30:00+05:30", "channel": "platform", "sender": "kabir", "text": "We'll write the release notes by next week.", "label": {"kind": "new", "due": "2026-12-04"}}
+{"id": "gen-0219", "ts": "2026-11-23T13:30:00+05:30", "channel": "product", "sender": "aditi", "text": "I might set up the staging cluster if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0211", "ts": "2026-11-23T14:30:00+05:30", "channel": "analytics", "sender": "dev", "text": "Vikram said they would run the churn analysis.", "label": {"kind": null, "due": null}}
+{"id": "gen-0228", "ts": "2026-11-23T15:50:00+05:30", "channel": "product", "sender": "nikhil", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0189", "ts": "2026-11-24T09:30:00+05:30", "channel": "product", "sender": "ritu", "text": "Thanks, that helps a lot!", "label": {"kind": null, "due": null}}
+{"id": "gen-0237", "ts": "2026-11-24T10:10:00+05:30", "channel": "platform", "sender": "neha", "text": "I'll run the churn analysis.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0052", "ts": "2026-11-24T10:20:00+05:30", "channel": "analytics", "sender": "isha", "text": "Maybe we could review the API spec EOD?", "label": {"kind": null, "due": null}}
+{"id": "gen-0154", "ts": "2026-11-24T10:50:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I will run the churn analysis by Dec 6.", "label": {"kind": "new", "due": "2026-12-06"}}
+{"id": "gen-0155", "ts": "2026-11-24T11:00:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0072", "ts": "2026-11-24T12:00:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Can someone fix the CSV export bug by 29 Nov?", "label": {"kind": null, "due": null}}
+{"id": "gen-0193", "ts": "2026-11-24T12:30:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Did anyone update the onboarding doc yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0181", "ts": "2026-11-24T12:40:00+05:30", "channel": "product", "sender": "aditi", "text": "Who owns the decision to prepare the board metrics?", "label": {"kind": null, "due": null}}
+{"id": "gen-0026", "ts": "2026-11-24T13:50:00+05:30", "channel": "analytics", "sender": "dev", "text": "Ravi said they would write the release notes.", "label": {"kind": null, "due": null}}
+{"id": "gen-0062", "ts": "2026-11-24T14:10:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I will update the onboarding doc by 9 Dec.", "label": {"kind": "new", "due": "2026-12-09"}}
+{"id": "gen-0135", "ts": "2026-11-24T14:10:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Maybe we could fix the CSV export bug Friday?", "label": {"kind": null, "due": null}}
+{"id": "gen-0241", "ts": "2026-11-24T15:30:00+05:30", "channel": "product", "sender": "nikhil", "text": "Not sure we can send the pricing deck by EOD, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0090", "ts": "2026-11-24T15:40:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Can someone write the release notes by next week?", "label": {"kind": null, "due": null}}
+{"id": "gen-0098", "ts": "2026-11-24T16:20:00+05:30", "channel": "customer-success", "sender": "omar", "text": "I'll share the Q4 usage numbers by Thursday.", "label": {"kind": "new", "due": "2026-11-26"}}
+{"id": "gen-0095", "ts": "2026-11-24T16:30:00+05:30", "channel": "analytics", "sender": "dev", "text": "Sure, I can draft the renewal proposal for Initech by 29 Nov.", "label": {"kind": "new", "due": "2026-11-29"}}
+{"id": "gen-0042", "ts": "2026-11-24T17:00:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Done: run the churn analysis.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0054", "ts": "2026-11-25T10:20:00+05:30", "channel": "platform", "sender": "kabir", "text": "I've run the churn analysis.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0057", "ts": "2026-11-25T12:00:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Neha said they would set up the staging cluster.", "label": {"kind": null, "due": null}}
+{"id": "gen-0256", "ts": "2026-11-25T13:40:00+05:30", "channel": "product", "sender": "zoya", "text": "I will draft the renewal proposal for Initech by Thursday.", "label": {"kind": "new", "due": "2026-11-26"}}
+{"id": "gen-0197", "ts": "2026-11-25T14:40:00+05:30", "channel": "platform", "sender": "kabir", "text": "Should we record the demo video before 10 Dec?", "label": {"kind": null, "due": null}}
+{"id": "gen-0016", "ts": "2026-11-25T15:20:00+05:30", "channel": "customer-success", "sender": "leela", "text": "We need to update the onboarding doc by end of the week.", "label": {"kind": null, "due": null}}
+{"id": "gen-0258", "ts": "2026-11-25T15:40:00+05:30", "channel": "customer-success", "sender": "tara", "text": "Did anyone review the API spec yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0225", "ts": "2026-11-25T16:30:00+05:30", "channel": "platform", "sender": "sara", "text": "I need to push the deadline to review the API spec to Monday.", "label": {"kind": "slip", "due": "2026-11-30"}}
+{"id": "gen-0011", "ts": "2026-11-25T16:40:00+05:30", "channel": "platform", "sender": "arjun", "text": "I will record the demo video this sprint.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0096", "ts": "2026-11-25T17:00:00+05:30", "channel": "platform", "sender": "kabir", "text": "Sure, I can share the Q4 usage numbers by next week.", "label": {"kind": "new", "due": "2026-12-04"}}
+{"id": "gen-0022", "ts": "2026-11-26T09:00:00+05:30", "channel": "platform", "sender": "ravi", "text": "Sure, I can fix the CSV export bug by 1 Dec.", "label": {"kind": "new", "due": "2026-12-01"}}
+{"id": "gen-0038", "ts": "2026-11-26T09:50:00+05:30", "channel": "analytics", "sender": "ananya", "text": "Done: written the release notes.", "label": {"kind": "done", "due": null}}
+{"id": "gen-0171", "ts": "2026-11-26T11:00:00+05:30", "channel": "product", "sender": "ritu", "text": "Did anyone draft the renewal proposal for Initech yet?", "label": {"kind": null, "due": null}}
+{"id": "gen-0249", "ts": "2026-11-26T11:00:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "I need to push the deadline to prepare the board metrics to Friday.", "label": {"kind": "slip", "due": "2026-11-27"}}
+{"id": "gen-0008", "ts": "2026-11-26T12:00:00+05:30", "channel": "customer-success", "sender": "tara", "text": "I will draft the renewal proposal for Initech by Wednesday.", "label": {"kind": "new", "due": "2026-12-02"}}
+{"id": "gen-0191", "ts": "2026-11-26T13:00:00+05:30", "channel": "platform", "sender": "arjun", "text": "I need to push the deadline to update the onboarding doc to end of the week.", "label": {"kind": "slip", "due": "2026-11-27"}}
+{"id": "gen-0013", "ts": "2026-11-26T14:00:00+05:30", "channel": "analytics", "sender": "isha", "text": "We'll migrate the billing tables by Friday.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0271", "ts": "2026-11-26T14:20:00+05:30", "channel": "analytics", "sender": "isha", "text": "Reminder: standup moves to 10:30 tomorrow.", "label": {"kind": null, "due": null}}
+{"id": "gen-0267", "ts": "2026-11-26T15:10:00+05:30", "channel": "customer-success", "sender": "priya", "text": "On it. I'll share the Q4 usage numbers before Dec 8.", "label": {"kind": "new", "due": "2026-12-08"}}
+{"id": "gen-0007", "ts": "2026-11-26T15:20:00+05:30", "channel": "platform", "sender": "arjun", "text": "On it. I'll send the pricing deck before Dec 4.", "label": {"kind": "new", "due": "2026-12-04"}}
+{"id": "gen-0018", "ts": "2026-11-26T15:40:00+05:30", "channel": "product", "sender": "aditi", "text": "I will fix the CSV export bug by Monday.", "label": {"kind": "new", "due": "2026-11-30"}}
+{"id": "gen-0168", "ts": "2026-11-26T16:10:00+05:30", "channel": "customer-success", "sender": "omar", "text": "Sure, I can update the onboarding doc by Dec 4.", "label": {"kind": "new", "due": "2026-12-04"}}
+{"id": "gen-0167", "ts": "2026-11-26T17:10:00+05:30", "channel": "platform", "sender": "ravi", "text": "Sure, I can write the release notes by Monday.", "label": {"kind": "new", "due": "2026-11-30"}}
+{"id": "gen-0199", "ts": "2026-11-26T17:10:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I'll share the Q4 usage numbers.", "label": {"kind": "new", "due": null}}
+{"id": "gen-0019", "ts": "2026-11-27T09:30:00+05:30", "channel": "customer-success", "sender": "vikram", "text": "Not sure we can record the demo video by Wednesday, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0123", "ts": "2026-11-27T10:30:00+05:30", "channel": "platform", "sender": "ravi", "text": "I will migrate the billing tables by EOD.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0032", "ts": "2026-11-27T10:50:00+05:30", "channel": "product", "sender": "ritu", "text": "Great work on the launch everyone.", "label": {"kind": null, "due": null}}
+{"id": "gen-0174", "ts": "2026-11-27T11:40:00+05:30", "channel": "product", "sender": "karan", "text": "Not sure we can migrate the billing tables by 2 Dec, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0159", "ts": "2026-11-27T12:10:00+05:30", "channel": "analytics", "sender": "rahul", "text": "I'll run the churn analysis by next week.", "label": {"kind": "new", "due": "2026-12-04"}}
+{"id": "gen-0201", "ts": "2026-11-27T12:20:00+05:30", "channel": "customer-success", "sender": "priya", "text": "Sure, I can run the churn analysis by Wednesday.", "label": {"kind": "new", "due": "2026-12-02"}}
+{"id": "gen-0253", "ts": "2026-11-27T14:20:00+05:30", "channel": "customer-success", "sender": "leela", "text": "I'll share the Q4 usage numbers by Friday.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0023", "ts": "2026-11-27T14:30:00+05:30", "channel": "analytics", "sender": "dev", "text": "Not sure we can set up the staging cluster by end of the week, let's discuss.", "label": {"kind": null, "due": null}}
+{"id": "gen-0056", "ts": "2026-11-27T16:00:00+05:30", "channel": "platform", "sender": "arjun", "text": "I'll share the Q4 usage numbers by EOD.", "label": {"kind": "new", "due": "2026-11-27"}}
+{"id": "gen-0156", "ts": "2026-11-27T16:20:00+05:30", "channel": "platform", "sender": "arjun", "text": "I might prepare the board metrics if I get time.", "label": {"kind": null, "due": null}}
+{"id": "gen-0227", "ts": "2026-11-27T16:50:00+05:30", "channel": "product", "sender": "zoya", "text": "Sure, I can prepare the board metrics by tomorrow.", "label": {"kind": "new", "due": "2026-11-28"}}
