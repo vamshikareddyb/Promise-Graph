@@ -3,6 +3,7 @@ package dev.promisegraph.temporal;
 import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_LLM;
 import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_MAIN;
 
+import dev.promisegraph.gmail.GmailSyncWorkflowImpl;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerOptions;
 import java.util.function.BiFunction;
@@ -15,18 +16,21 @@ public final class Workers {
     /**
      * @param newWorker creates a worker for a task queue, e.g. {@code factory::newWorker}
      *     or {@code testEnv::newWorker}
+     * @return the main-queue worker, for optional sources such as Gmail to add their activities
      */
-    public static void register(
+    public static Worker register(
             BiFunction<String, WorkerOptions, Worker> newWorker,
             PromiseActivities activities,
             ModelActivities modelActivities,
             int modelConcurrency) {
         Worker main = newWorker.apply(TASK_QUEUE_MAIN, WorkerOptions.getDefaultInstance());
-        main.registerWorkflowImplementationTypes(ExtractionWorkflowImpl.class, PromiseWorkflowImpl.class, DigestWorkflowImpl.class);
+        main.registerWorkflowImplementationTypes(ExtractionWorkflowImpl.class, PromiseWorkflowImpl.class,
+                DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class);
         main.registerActivitiesImplementations(activities);
 
         Worker llm = newWorker.apply(TASK_QUEUE_LLM,
                 WorkerOptions.newBuilder().setMaxConcurrentActivityExecutionSize(modelConcurrency).build());
         llm.registerActivitiesImplementations(modelActivities);
+        return main;
     }
 }
