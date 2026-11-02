@@ -17,7 +17,8 @@ public final class Detect {
     /** A sentence that looks like a commitment. {@code sentence} is an exact substring of the message. */
     public record Candidate(String sentence, CommitmentKind kind, double score) {}
 
-    private static final Pattern SENTENCE = Pattern.compile("[^.!?]+[.!?]?");
+    /** Sentences end at punctuation or a line break (emails often have neither on greetings). */
+    private static final Pattern SENTENCE = Pattern.compile("[^.!?\\n]+[.!?]?");
 
     private static final Pattern NEW = Pattern.compile(
             "\\b(i'll|i will|we'll|we will|i can|we can|i'm going to|i am going to|"

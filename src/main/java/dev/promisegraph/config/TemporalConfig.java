@@ -2,6 +2,7 @@ package dev.promisegraph.config;
 
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Extractor;
+import dev.promisegraph.gmail.GmailActivitiesImpl;
 import dev.promisegraph.notify.Notifier;
 import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.Repository;
@@ -21,10 +22,12 @@ import io.temporal.client.schedules.ScheduleOptions;
 import io.temporal.client.schedules.ScheduleSpec;
 import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
+import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -64,9 +67,11 @@ public class TemporalConfig {
 
     @Bean(destroyMethod = "shutdown")
     WorkerFactory workerFactory(WorkflowClient client, PromiseActivitiesImpl activities, ModelActivitiesImpl model,
-            PromiseGraphProperties props) {
+            PromiseGraphProperties props, ObjectProvider<GmailActivitiesImpl> gmailActivities) {
         WorkerFactory factory = WorkerFactory.newInstance(client);
-        Workers.register(factory::newWorker, activities, model, props.llmMaxConcurrency());
+        Worker main = Workers.register(factory::newWorker, activities, model, props.llmMaxConcurrency());
+        // Present only when promisegraph.gmail.enabled=true. Registered before the factory starts.
+        gmailActivities.ifAvailable(main::registerActivitiesImplementations);
         return factory;
     }
 

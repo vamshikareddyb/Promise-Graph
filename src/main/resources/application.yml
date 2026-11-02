@@ -27,6 +27,12 @@ promisegraph:
   gateway:
     max-batch: 20
     max-wait: 30s
+  gmail:
+    enabled: ${PG_GMAIL_ENABLED:false}
+    credentials-file: ${PG_GMAIL_CREDENTIALS:${user.home}/.promise-graph/gmail-credentials.json}
+    token-file: ${PG_GMAIL_TOKEN:${user.home}/.promise-graph/gmail-token.json}
+    poll-interval: ${PG_GMAIL_POLL_INTERVAL:60s}
+    backfill-days: ${PG_GMAIL_BACKFILL_DAYS:2}
 
 server:
   port: ${PORT:8787}
