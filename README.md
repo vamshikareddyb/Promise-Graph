@@ -8,17 +8,21 @@ Every day, people at work make small commitments that are never written down any
 one is forgotten or quietly slips, the people depending on it find out too late. Promise Graph
 follows through on them, without anyone changing how they work.
 
-**Status: Phase 1 (capture and track) is implemented.** Dependency links, ripple alerts and
-handoffs come in Phase 2.
+**Status: Phase 1 (capture and track) is implemented, and it can read a personal Gmail account.**
+Dependency links, ripple alerts and handoffs come in Phase 2.
 
 ## How it works
 
+Messages arrive two ways: the `GmailSyncWorkflow` reads new sent and received email every minute
+(see [docs/gmail-setup.md](docs/gmail-setup.md)), and any other source can post to the webhook.
+
 ```
-chat message -> ingestion gateway -> ExtractionWorkflow ------------------> PromiseWorkflow (one per promise)
+email or chat -> GmailSyncWorkflow ----> ExtractionWorkflow ------------------> PromiseWorkflow (one per promise)
+                 or webhook gateway      1. claim + cheap filter               confirm or auto-activate
                 (batch per channel)   1. claim + cheap filter               confirm or auto-activate
-                                      2. extract (rules or model)           reminders, due-day check
-                                      3. match to existing promises         slip, kept, missed
-                                      4. start or signal promise workflows  every change recorded
+                                         2. extract (rules or model)           reminders, due-day check
+                                         3. match to existing promises         slip, kept, missed
+                                         4. start or signal promise workflows  every change recorded
 ```
 
 | Package | What it holds |
@@ -26,6 +30,7 @@ chat message -> ingestion gateway -> ExtractionWorkflow ------------------> Prom
 | `domain` | Business rules: lifecycle, IDs, timing, matching. No Temporal, Spring or I/O. |
 | `extraction` | Commitment filter, date parsing, rule-based extractor; `model` validates and calls the model. |
 | `ingestion` | Gateway (batching, dedupe), webhook endpoint, replay of the simulated company. |
+| `gmail` | Read-only Gmail sync: sign-in, history-based fetching, email cleaning and filtering. |
 | `temporal` | Workflows, activities, worker registration. |
 | `store` | In-memory and Postgres (JDBC) repositories. |
 | `sim`, `eval` | Simulated 20-person company with 300 labelled messages; the Gate 1 evaluation. |

@@ -56,6 +56,21 @@ tasks.register<JavaExec>("evalGate") {
     args("--min-precision", "0.85")
 }
 
+// One-time Gmail sign-in. Saves a read-only token outside the repository.
+// ./gradlew gmailAuth [-Pcredentials=path] [-Ptoken=path]
+tasks.register<JavaExec>("gmailAuth") {
+    group = "application"
+    description = "Signs in to a personal Gmail account (read-only) and saves the token locally."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "dev.promisegraph.gmail.GmailAuthorize"
+    standardInput = System.`in`
+    val home = System.getProperty("user.home")
+    args(
+        "--credentials", (project.findProperty("credentials") ?: "$home/.promise-graph/gmail-credentials.json").toString(),
+        "--token", (project.findProperty("token") ?: "$home/.promise-graph/gmail-token.json").toString(),
+    )
+}
+
 tasks.named("check") {
     dependsOn("evalGate")
 }
