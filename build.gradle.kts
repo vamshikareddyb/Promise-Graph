@@ -1,3 +1,5 @@
+import java.time.Duration
+
 plugins {
     java
     id("org.springframework.boot") version "3.5.16"
@@ -47,7 +49,7 @@ tasks.test {
     // A test that hangs fails after this long, with the stack of where it was stuck.
     systemProperty("junit.jupiter.execution.timeout.default", "3m")
     systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "SEPARATE_THREAD")
-    timeout = java.time.Duration.ofMinutes(25)
+    timeout.set(Duration.ofMinutes(25))
     testLogging {
         events("started", "failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
