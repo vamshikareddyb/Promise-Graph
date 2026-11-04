@@ -109,7 +109,7 @@ public class TemporalConfig {
             HandoffStore handoffs, HandoffScheduler scheduler, HandoffPlanning.Planner planner, Directory directory,
             WorkflowClient client, SituationLoader situations, NegotiationStore negotiationStore,
             RecoveryPlanning.Planner recoveryPlanner, NegotiationProperties negotiation, DeadLetterStore deadLetters, AuditLog audit,
-            TimingPolicy policy, PromiseGraphProperties props) {
+            TimingPolicy timing, PromiseGraphProperties props) {
         NegotiationActivitiesImpl.Policy policy = new NegotiationActivitiesImpl.Policy(negotiation.enabled(), negotiation.approvalHours(),
                 negotiation.reminderHours(), negotiation.maxRounds(), negotiation.teamChecks());
         return new Workers.Activities(
@@ -120,7 +120,7 @@ public class TemporalConfig {
                 new PlanningActivitiesImpl(planner, repo, links, handoffs, directory),
                 new NegotiationActivitiesImpl(situations, repo, negotiationStore, promises, client, policy, Clock.systemUTC()),
                 new RecoveryActivitiesImpl(recoveryPlanner, situations),
-                new OpsActivitiesImpl(repo, deadLetters, audit, client, policy, props.confidenceThreshold()));
+                new OpsActivitiesImpl(repo, deadLetters, audit, client, timing, props.confidenceThreshold()));
     }
 
     @Bean(destroyMethod = "shutdown")
