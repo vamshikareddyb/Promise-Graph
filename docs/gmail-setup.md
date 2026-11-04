@@ -52,7 +52,9 @@ From the project folder:
 ./gradlew gmailAuth
 ```
 
-It prints a Google link. Open it, choose your account, and allow read-only access. Google may warn
+It opens Google's sign-in page in your browser (and prints the link too, in case it can't). Choose
+your account and allow read-only access. Leave the terminal running until it finishes: in
+PowerShell, Ctrl+C stops the program rather than copying. Google may warn
 that the app is unverified: that is your own app in Testing, so choose **Continue**. The terminal
 then shows `Signed in as …` and saves the token to `~/.promise-graph/gmail-token.json`.
 

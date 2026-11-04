@@ -103,9 +103,14 @@ public final class GmailAuthorize {
         String redirectUri = "http://127.0.0.1:" + server.getAddress().getPort();
 
         try {
-            System.out.println("Open this link in your browser and sign in with the Gmail account to read:\n");
-            System.out.println(authUrl(secrets.clientId(), redirectUri, state, challenge(verifier)));
-            System.out.println("\nWaiting for you to finish signing in (5 minutes)...");
+            String link = authUrl(secrets.clientId(), redirectUri, state, challenge(verifier));
+            if (openBrowser(link)) {
+                System.out.println("Your browser should now show Google's sign-in page. If it didn't, open this link:\n");
+            } else {
+                System.out.println("Open this link in your browser and sign in with the Gmail account to read:\n");
+            }
+            System.out.println(link);
+            System.out.println("\nWaiting for you to finish signing in (5 minutes). Don't press Ctrl+C here: it stops the sign-in.");
 
             Map<String, String> params = answer.get(5, TimeUnit.MINUTES);
             if (params.containsKey("error")) {
@@ -130,5 +135,23 @@ public final class GmailAuthorize {
             }
         }
         return fallback;
+    }
+
+    /**
+     * Opens the sign-in page in the default browser, so nobody has to copy a long link out of a
+     * terminal (in PowerShell, Ctrl+C stops the program instead of copying). Returns false where
+     * there is no desktop, e.g. over SSH; the link is printed either way.
+     */
+    static boolean openBrowser(String link) {
+        try {
+            if (!java.awt.GraphicsEnvironment.isHeadless() && java.awt.Desktop.isDesktopSupported()
+                    && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create(link));
+                return true;
+            }
+        } catch (IOException | RuntimeException e) {
+            // fall back to the printed link
+        }
+        return false;
     }
 }

@@ -83,7 +83,7 @@ async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(state.person ? { 'X-PG-Viewer': state.person } : {}) };
   const res = await fetch('/api' + path, { headers, ...opts });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || res.statusText);
+  if (!res.ok) throw new Error(body.error || res.statusText || `HTTP ${res.status}`);
   return body;
 }
 const post = (path, data) => api(path, { method: 'POST', body: JSON.stringify(data) });
@@ -366,8 +366,15 @@ document.getElementById('tabs').onclick = e => {
   render();
 };
 async function init() {
-  try { state.people = await api('/people'); } catch { state.people = []; }
+  let peopleError = null;
+  try { state.people = await api('/people'); } catch (e) { state.people = []; peopleError = e.message; }
   const sel = document.getElementById('person');
+  if (peopleError) {
+    // Without people nobody can be chosen, and every tab would only say who is viewing is missing.
+    $view.innerHTML = `<div class="empty">Could not load the list of people: ${esc(peopleError)}.<br>
+      The app is reachable but failed to answer; the error is in the app's log (look for "Caused by").</div>`;
+    return;
+  }
   sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.lead ? ' (lead)' : ''}</option>`).join('');
   state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
   if (state.person) sel.value = state.person;
