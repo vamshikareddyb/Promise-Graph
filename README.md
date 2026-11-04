@@ -184,6 +184,7 @@ skipped without it.
   `./gradlew loadTest` is for; it has not been run yet. On the test server the worker going down is
   modelled by pausing it and rebuilding every workflow from history; `loadTest -PkillAt` stops a real one.
 - Metrics and alerts are in place; distributed tracing is not.
-- Times use UTC working hours (09:30 India time). Per-person time zones come later.
+- Times use UTC working hours (09:30 India time), and the app runs in UTC whatever the computer's
+  time zone, so log times are UTC too. Per-person time zones come later.
 
 See [docs/decisions.md](docs/decisions.md) for the main engineering decisions.
