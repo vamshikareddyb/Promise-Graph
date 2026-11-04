@@ -16,8 +16,9 @@ import dev.promisegraph.temporal.Contracts.PromiseSignal;
 import dev.promisegraph.temporal.Contracts.PromiseWorkflowInput;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
+import io.temporal.testing.TestEnvironmentOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
-import io.temporal.worker.WorkerFactory;
+import io.temporal.worker.WorkerFactoryOptions;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -34,7 +35,7 @@ import org.junit.jupiter.api.Timeout;
 
 /**
  * Many promises at once, with failures injected: storage writes that fail after succeeding, and
- * the worker killed in the middle of the work. Each promise follows one of three paths (kept,
+ * the worker going down in the middle of the work. Each promise follows one of three paths (kept,
  * slipped then kept, never answered and so missed), and at the end every promise must be in the
  * state its path implies, with every recorded version stored exactly once and no inbox item twice.
  *
@@ -44,13 +45,9 @@ import org.junit.jupiter.api.Timeout;
 class LoadAndChaosTest {
 
     private TestWorkflowEnvironment env;
-    private WorkerFactory second;
 
     @AfterEach
     void tearDown() {
-        if (second != null) {
-            second.shutdownNow();
-        }
         if (env != null) {
             env.close();
         }
@@ -139,10 +136,18 @@ class LoadAndChaosTest {
         System.out.printf("load: %d injected faults, %.1f s%n", flaky[0].injected.get(), (System.nanoTime() - started) / 1e9);
     }
 
+    /**
+     * The worker goes down mid-work: it stops polling while signals keep arriving, then comes back
+     * with no workflow cache, so every workflow is rebuilt from its history exactly as after a
+     * process crash. (A second worker factory outside the test environment would bypass the test
+     * server's time skipping, so the restart is modelled this way.)
+     */
     @Test
     @Timeout(600)
-    void aKilledWorkerIsReplacedAndNothingIsLostOrDoneTwice() {
-        env = TestWorkflowEnvironment.newInstance();
+    void aWorkerThatGoesDownLosesNothingAndRepeatsNothing() {
+        env = TestWorkflowEnvironment.newInstance(TestEnvironmentOptions.newBuilder()
+                .setWorkerFactoryOptions(WorkerFactoryOptions.newBuilder().setWorkflowCacheSize(0).build())
+                .build());
         TestStack stack = new TestStack(env);
         stack.register(env);
         env.start();
@@ -151,12 +156,9 @@ class LoadAndChaosTest {
         env.sleep(Duration.ofHours(25));
         signalPaths(env, ids, "first");
 
-        // Kill the worker while it is handling those signals, then bring up a new one.
-        env.getWorkerFactory().shutdownNow();
-        signalPaths(env, ids, "second"); // arrive while no worker is running
-        second = WorkerFactory.newInstance(env.getWorkflowClient());
-        Workers.register(second::newWorker, stack.activities, 2);
-        second.start();
+        env.getWorkerFactory().suspendPolling();
+        signalPaths(env, ids, "second"); // arrive while no worker is polling
+        env.getWorkerFactory().resumePolling();
 
         env.sleep(Duration.ofDays(30));
         checkOutcome(stack, ids);
