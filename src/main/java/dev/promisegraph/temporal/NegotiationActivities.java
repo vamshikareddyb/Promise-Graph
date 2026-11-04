@@ -4,6 +4,7 @@ import dev.promisegraph.links.Ripple;
 import dev.promisegraph.recovery.NegotiationRecord;
 import dev.promisegraph.temporal.Contracts.RippleRequest;
 import dev.promisegraph.temporal.NegotiationContracts.ApplyStep;
+import dev.promisegraph.temporal.NegotiationContracts.NegotiationRequest;
 import dev.promisegraph.temporal.NegotiationContracts.PrecheckRequest;
 import dev.promisegraph.temporal.NegotiationContracts.ReleaseRequest;
 import dev.promisegraph.temporal.NegotiationContracts.ReserveRequest;
@@ -18,6 +19,14 @@ public interface NegotiationActivities {
 
     /** Read-only: does this ripple affect a customer promise or enough teams to negotiate? */
     Trigger shouldNegotiate(RippleRequest request, Ripple.Result result);
+
+    /**
+     * Starts the negotiation as its own workflow, not a child of the ripple: it can run for days
+     * after the ripple ends. Its ID is fixed per slip, so a retry starts nothing new.
+     *
+     * @return false if it was already started
+     */
+    boolean startNegotiation(NegotiationRequest request);
 
     /** Stops older negotiations about the same promise; a newer slip makes their plans stale. */
     List<String> supersede(String tenant, String sourcePromiseId, String negotiationId);

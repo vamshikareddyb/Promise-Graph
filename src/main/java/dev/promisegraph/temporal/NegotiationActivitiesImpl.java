@@ -17,6 +17,7 @@ import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.Contracts.PromiseSignal;
 import dev.promisegraph.temporal.Contracts.RippleRequest;
 import dev.promisegraph.temporal.NegotiationContracts.ApplyStep;
+import dev.promisegraph.temporal.NegotiationContracts.NegotiationRequest;
 import dev.promisegraph.temporal.NegotiationContracts.PrecheckRequest;
 import dev.promisegraph.temporal.NegotiationContracts.ReleaseRequest;
 import dev.promisegraph.temporal.NegotiationContracts.Reservation;
@@ -112,6 +113,21 @@ public class NegotiationActivitiesImpl implements NegotiationActivities {
         }
         return new Trigger(true, reason, s.source().owner(), s.source().what(), policy.approvalHours(), policy.reminderHours(),
                 policy.maxRounds());
+    }
+
+    @Override
+    public boolean startNegotiation(NegotiationRequest request) {
+        WorkflowOptions options = WorkflowOptions.newBuilder()
+                .setWorkflowId(NegotiationContracts.workflowId(request.negotiationId()))
+                .setTaskQueue(TASK_QUEUE_MAIN)
+                .setWorkflowIdReusePolicy(WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE)
+                .build();
+        try {
+            WorkflowClient.start(client.newWorkflowStub(NegotiationWorkflow.class, options)::run, request);
+            return true;
+        } catch (WorkflowExecutionAlreadyStarted e) {
+            return false;
+        }
     }
 
     @Override

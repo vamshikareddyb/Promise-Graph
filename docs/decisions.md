@@ -110,6 +110,9 @@ the ripple reaches a promise made to a customer, or promises in at least two tea
 approve plans for every small slip would train them to ignore the requests. A slip with no new
 date has nothing to plan around, so it only warns.
 
+A negotiation is started by an activity as a workflow of its own, not as a child of the ripple:
+it runs for days after the ripple has finished, and nothing about it belongs to the ripple.
+
 ## 18. One verifier for every plan, whoever proposed it
 
 Rule plans and agent plans pass through the same `PlanVerifier`: real open promises only, no date
