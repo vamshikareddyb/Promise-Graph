@@ -45,9 +45,21 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.test {
     useJUnitPlatform()
     testLogging {
-        events("failed")
+        events("failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
+    // Print totals so CI shows what actually ran, e.g. whether the Docker-based tests were skipped.
+    addTestListener(object : TestListener {
+        override fun beforeSuite(suite: TestDescriptor) {}
+        override fun beforeTest(testDescriptor: TestDescriptor) {}
+        override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {}
+        override fun afterSuite(suite: TestDescriptor, result: TestResult) {
+            if (suite.parent == null) {
+                println("Tests: ${result.testCount} run, ${result.successfulTestCount} passed, " +
+                        "${result.failedTestCount} failed, ${result.skippedTestCount} skipped")
+            }
+        }
+    })
 }
 
 // Gate 1: fails the build if extraction precision drops below the threshold.
