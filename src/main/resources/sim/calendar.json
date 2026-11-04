@@ -1,0 +1,14 @@
+[
+  {
+    "person": "karan",
+    "kind": "leave",
+    "starts_on": "2026-11-16",
+    "ends_on": "2026-11-27"
+  },
+  {
+    "person": "omar",
+    "kind": "leave",
+    "starts_on": "2026-11-23",
+    "ends_on": "2026-11-24"
+  }
+]

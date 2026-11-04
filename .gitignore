@@ -1,0 +1,12 @@
+.gradle/
+build/
+out/
+.idea/
+*.iml
+.vscode/
+.env
+
+# Never commit Google credentials or tokens
+*credentials*.json
+*token*.json
+client_secret*.json
