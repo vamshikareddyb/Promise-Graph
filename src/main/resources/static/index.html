@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promise Graph</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e2dc;
+    --accent: #2f5bd3; --accent-ink: #ffffff; --good: #2e7d4f; --warn: #b26a00; --bad: #b3261e; --soft: #eef1fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a3a29b; --line: #34332f;
+            --accent: #7d9cf0; --accent-ink: #10131c; --good: #6cc496; --warn: #e2a53f; --bad: #f08a80; --soft: #232838; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav button { border: 0; background: none; color: var(--muted); padding: 6px 10px; border-radius: 6px; font: inherit; cursor: pointer; }
+  nav button.on { background: var(--soft); color: var(--ink); font-weight: 600; }
+  .who { margin-left: auto; display: flex; gap: 8px; align-items: center; color: var(--muted); }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
+  h2 { font-size: 16px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .card.done { opacity: .6; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  button.act, .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 5px 12px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select { font: inherit; font-size: 14px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
+  .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned { color: var(--good); }
+  .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled { color: var(--warn); }
+  .s-broken, .s-rejected, .s-uncovered, .s-cancelled { color: var(--bad); }
+  .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over { color: var(--muted); }
+  .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+  .err { color: var(--bad); font-size: 13px; }
+  .split { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .split { grid-template-columns: 1fr 1fr; } }
+  svg text { fill: var(--ink); font-size: 12px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Promise Graph</h1>
+  <nav id="tabs">
+    <button data-tab="inbox" class="on">Inbox</button>
+    <button data-tab="promises">Promises</button>
+    <button data-tab="links">Links</button>
+    <button data-tab="graph">Graph</button>
+    <button data-tab="handoffs">Handoffs</button>
+  </nav>
+  <label class="who">Viewing as <select id="person"></select></label>
+</header>
+<main id="view"></main>
+
+<script>
+const state = { tab: 'inbox', person: null, people: [], showDone: false, allPromises: false };
+const $view = document.getElementById('view');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pill = s => `<span class="pill s-${esc(s)}">${esc(String(s).replace(/_/g, ' '))}</span>`;
+const when = iso => iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
+
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || res.statusText);
+  return body;
+}
+const post = (path, data) => api(path, { method: 'POST', body: JSON.stringify(data) });
+const name = id => (state.people.find(p => p.id === id) || {}).name || id;
+
+// ------------------------------------------------------------ inbox
+const NEEDS_DATE = new Set(['new date', 'slip', 'set date']);
+
+async function renderInbox() {
+  if (!state.person) { $view.innerHTML = '<div class="empty">Choose who you are at the top right.</div>'; return; }
+  const items = await api(`/inbox?person=${encodeURIComponent(state.person)}&all=${state.showDone}`);
+  const open = items.filter(i => i.status === 'open').length;
+  $view.innerHTML = `
+    <h2>Inbox for ${esc(name(state.person))}</h2>
+    <p class="lead">${open} waiting for you. Reminders, questions about promises and requests to cover arrive here.</p>
+    <div class="toolbar"><label><input type="checkbox" id="showDone" ${state.showDone ? 'checked' : ''}> Show done</label></div>
+    ${items.length ? items.map(card).join('') : '<div class="empty">Nothing here right now.</div>'}`;
+  document.getElementById('showDone').onchange = e => { state.showDone = e.target.checked; render(); };
+  $view.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b));
+}
+
+function card(i) {
+  const done = i.status !== 'open';
+  const needsDate = i.actions.some(a => NEEDS_DATE.has(a)) || i.actions.includes('edit');
+  return `<div class="card ${done ? 'done' : ''}" data-key="${esc(i.key)}">
+    <div>${esc(i.text)}</div>
+    <div class="meta">${when(i.createdAt)}${done ? ' · done: ' + esc(i.resolvedAction) : ''}</div>
+    ${done || !i.actions.length ? '' : `<div class="row">
+      ${i.actions.map(a => `<button class="act ${a === i.actions[0] ? 'primary' : ''}" data-act="${esc(a)}">${esc(a)}</button>`).join('')}
+      ${needsDate ? '<input type="date" aria-label="New date">' : ''}
+      ${i.actions.includes('edit') ? '<input type="text" placeholder="Reword the promise (optional)" aria-label="Promise text">' : ''}
+      <span class="err" role="alert"></span></div>`}
+  </div>`;
+}
+
+async function act(button) {
+  const cardEl = button.closest('.card');
+  const action = button.dataset.act;
+  const due = cardEl.querySelector('input[type=date]')?.value || null;
+  const what = cardEl.querySelector('input[type=text]')?.value || null;
+  const err = cardEl.querySelector('.err');
+  if (NEEDS_DATE.has(action) && !due) { err.textContent = 'Pick a date first.'; return; }
+  cardEl.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    await post(`/inbox/${encodeURIComponent(cardEl.dataset.key)}/actions`, { action, by: state.person, due, what });
+    render();
+  } catch (e) {
+    err.textContent = e.message;
+    cardEl.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
+}
+
+// ------------------------------------------------------------ promises
+async function renderPromises() {
+  const ps = await api(`/promises?all=${state.allPromises}`);
+  $view.innerHTML = `
+    <h2>Promises</h2>
+    <p class="lead">${ps.length} ${state.allPromises ? 'in total' : 'open'}, soonest due first.</p>
+    <div class="toolbar"><label><input type="checkbox" id="allP" ${state.allPromises ? 'checked' : ''}> Include closed</label></div>
+    ${ps.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Links</th></tr></thead><tbody>
+      ${ps.map(p => `<tr><td>${esc(p.what)}${p.latestQuote ? `<div class="meta">“${esc(p.latestQuote)}”</div>` : ''}</td>
+        <td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${pill(p.status)}</td>
+        <td class="meta">${p.dependsOn.length ? 'waits on ' + p.dependsOn.length : ''}${p.dependsOn.length && p.blocks.length ? ', ' : ''}${p.blocks.length ? p.blocks.length + ' wait on it' : ''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">No promises yet. Send a message or connect Gmail.</div>'}`;
+  document.getElementById('allP').onchange = e => { state.allPromises = e.target.checked; render(); };
+}
+
+// ------------------------------------------------------------ links
+async function renderLinks() {
+  const [links, ps] = await Promise.all([api('/links'), api('/promises')]);
+  const opt = ps.map(p => `<option value="${esc(p.id)}">${esc(p.what)} (${esc(name(p.owner))})</option>`).join('');
+  const row = l => `<div class="card"><div><b>${esc(l.toWhat)}</b> <span class="meta">(${esc(name(l.toOwner))})</span> depends on
+      <b>${esc(l.fromWhat)}</b> <span class="meta">(${esc(name(l.fromOwner))})</span> ${pill(l.status)}</div>
+      ${l.reason ? `<div class="meta">Why: “${esc(l.reason)}”</div>` : ''}
+      ${l.status === 'suggested' ? `<div class="row"><button class="act primary" data-d="confirm" data-f="${esc(l.from)}" data-t="${esc(l.to)}">Confirm</button>
+        <button class="act" data-d="reject" data-f="${esc(l.from)}" data-t="${esc(l.to)}">Not related</button><span class="err"></span></div>` : ''}</div>`;
+  $view.innerHTML = `
+    <h2>Dependency links</h2>
+    <p class="lead">A confirmed link means: if the first promise slips, the owner of the second one is warned.</p>
+    <div class="card"><b>Add a link</b><div class="row">
+      <select id="lt">${opt}</select> depends on <select id="lf">${opt}</select>
+      <button class="act primary" id="addLink">Add</button><span class="err" id="linkErr"></span></div></div>
+    ${links.length ? links.slice().reverse().map(row).join('') : '<div class="empty">No links yet. They are suggested from phrases like “once the API is live”.</div>'}`;
+  document.getElementById('addLink').onclick = async () => {
+    try { await post('/links', { from: document.getElementById('lf').value, to: document.getElementById('lt').value, by: state.person }); render(); }
+    catch (e) { document.getElementById('linkErr').textContent = e.message; }
+  };
+  $view.querySelectorAll('[data-d]').forEach(b => b.onclick = async () => {
+    try { await post('/links/decision', { from: b.dataset.f, to: b.dataset.t, decision: b.dataset.d, by: state.person }); render(); }
+    catch (e) { b.parentElement.querySelector('.err').textContent = e.message; }
+  });
+}
+
+// ------------------------------------------------------------ graph
+async function renderGraph() {
+  const [links, ps] = await Promise.all([api('/links'), api('/promises?all=true')]);
+  const shown = links.filter(l => l.status !== 'rejected');
+  const byId = Object.fromEntries(ps.map(p => [p.id, p]));
+  const ids = [...new Set(shown.flatMap(l => [l.from, l.to]))].filter(id => byId[id]);
+  if (!ids.length) { $view.innerHTML = '<h2>Graph</h2><div class="empty">No links to draw yet.</div>'; return; }
+  // Layer each promise by its longest chain of upstream promises.
+  const ups = id => shown.filter(l => l.to === id).map(l => l.from);
+  const layer = {};
+  const depth = (id, seen = new Set()) => {
+    if (layer[id] !== undefined) return layer[id];
+    if (seen.has(id)) return 0; // a loop: draw it, don't recurse forever
+    seen.add(id);
+    const u = ups(id).filter(x => ids.includes(x));
+    return (layer[id] = u.length ? 1 + Math.max(...u.map(x => depth(x, seen))) : 0);
+  };
+  ids.forEach(id => depth(id));
+  const cols = {};
+  ids.forEach(id => (cols[layer[id]] ||= []).push(id));
+  const W = 230, H = 56, GX = 70, GY = 22, P = 20;
+  const pos = {};
+  Object.entries(cols).forEach(([c, list]) => list.forEach((id, r) => pos[id] = { x: P + c * (W + GX), y: P + r * (H + GY) }));
+  const width = P * 2 + (Math.max(...Object.keys(cols).map(Number)) + 1) * (W + GX) - GX;
+  const height = P * 2 + Math.max(...Object.values(cols).map(l => l.length)) * (H + GY) - GY;
+  const color = s => getComputedStyle(document.documentElement).getPropertyValue(
+      { active: '--good', at_risk: '--warn', broken: '--bad' }[s] || '--muted').trim();
+  const clip = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+  const edges = shown.filter(l => pos[l.from] && pos[l.to]).map(l => {
+    const a = pos[l.from], b = pos[l.to];
+    const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2;
+    const back = x2 <= x1;
+    const d = back ? `M${x1},${y1} C${x1 + 60},${y1 - 80} ${x2 - 60},${y2 - 80} ${x2},${y2}` : `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
+    return `<path d="${d}" fill="none" stroke="var(--muted)" stroke-width="1.3" ${l.status === 'suggested' ? 'stroke-dasharray="5 4"' : ''} marker-end="url(#arr)"/>`;
+  }).join('');
+  const nodes = ids.map(id => { const p = byId[id], { x, y } = pos[id];
+    return `<g><rect x="${x}" y="${y}" width="${W}" height="${H}" rx="8" fill="var(--panel)" stroke="${color(p.status)}" stroke-width="1.6"/>
+      <text x="${x + 10}" y="${y + 22}" font-weight="600">${esc(clip(p.what, 32))}</text>
+      <text x="${x + 10}" y="${y + 41}" fill="var(--muted)" style="fill:var(--muted)">${esc(clip(name(p.owner), 16))} · ${esc(p.due || 'no date')} · ${esc(p.status.replace('_', ' '))}</text></g>`; }).join('');
+  $view.innerHTML = `<h2>Graph</h2>
+    <p class="lead">Arrows point from a promise to the promises waiting on it. Dashed arrows are suggestions not yet confirmed. Border colour shows status.</p>
+    <div class="card" style="overflow:auto"><svg width="${width}" height="${height}" role="img" aria-label="Dependency graph of promises">
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+      ${edges}${nodes}</svg></div>`;
+}
+
+// ------------------------------------------------------------ handoffs
+async function renderHandoffs() {
+  const hs = await api('/handoffs');
+  const peopleOpt = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  const item = (h, i) => `<tr><td>${esc(i.what)}${i.due ? `<div class="meta">due ${esc(i.due)}</div>` : ''}</td>
+      <td>${esc(name(i.acceptedOwner || i.proposedOwner || '—'))}</td><td>${pill(i.state)}</td>
+      <td>${['needs_owner', 'proposed', 'uncovered'].includes(i.state) && !['returned', 'cancelled'].includes(h.status)
+        ? `<select data-h="${esc(h.id)}" data-p="${esc(i.promiseId)}"><option value="">Ask someone…</option>${peopleOpt}</select>` : ''}</td></tr>`;
+  $view.innerHTML = `
+    <h2>Handoffs</h2>
+    <p class="lead">Who covers what while someone is away. Plans are made a few days ahead, work moves on the first day away and back the day after.</p>
+    <div class="card"><b>Plan an absence</b><div class="row">
+      <select id="ap">${peopleOpt}</select> from <input type="date" id="as"> to <input type="date" id="ae">
+      <button class="act primary" id="addAbs">Plan cover</button><span class="err" id="absErr"></span></div></div>
+    ${hs.length ? hs.map(h => `<div class="card">
+      <div><b>${esc(name(h.person))}</b> away ${esc(h.startsOn)}${h.endsOn ? ' to ' + esc(h.endsOn) : ' (leaving)'} ${pill(h.status)}
+        ${h.planner ? `<span class="meta"> · planned by ${esc(h.planner)}</span>` : ''}</div>
+      ${h.items.length ? `<table style="margin-top:10px"><thead><tr><th>Promise</th><th>Cover</th><th>State</th><th></th></tr></thead>
+        <tbody>${h.items.map(i => item(h, i)).join('')}</tbody></table>` : '<div class="meta">Nothing planned yet.</div>'}
+      ${['scheduled', 'planning', 'awaiting_cover', 'covered', 'active'].includes(h.status) ? `<div class="row"><button class="act" data-cancel="${esc(h.id)}">${h.status === 'active' ? 'They are back early' : 'Cancel absence'}</button></div>` : ''}
+    </div>`).join('') : '<div class="empty">No absences yet. They are detected from messages like “I’m on leave from 16 Nov to 27 Nov”, or plan one above.</div>'}`;
+  if (state.person) document.getElementById('ap').value = state.person;
+  document.getElementById('addAbs').onclick = async () => {
+    try { await post('/absences', { person: document.getElementById('ap').value, startsOn: document.getElementById('as').value, endsOn: document.getElementById('ae').value || null }); render(); }
+    catch (e) { document.getElementById('absErr').textContent = e.message; }
+  };
+  $view.querySelectorAll('select[data-h]').forEach(s => s.onchange = async () => {
+    if (!s.value) return;
+    try { await post(`/handoffs/${encodeURIComponent(s.dataset.h)}/assign`, { promiseId: s.dataset.p, owner: s.value, by: state.person }); setTimeout(render, 600); }
+    catch (e) { alertInline(s, e.message); }
+  });
+  $view.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+    try { await post(`/handoffs/${encodeURIComponent(b.dataset.cancel)}/cancel`, {}); setTimeout(render, 600); }
+    catch (e) { alertInline(b, e.message); }
+  });
+}
+const alertInline = (el, msg) => { const s = document.createElement('span'); s.className = 'err'; s.textContent = ' ' + msg; el.after(s); };
+
+// ------------------------------------------------------------ shell
+const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs };
+async function render() {
+  try { await views[state.tab](); }
+  catch (e) { $view.innerHTML = `<div class="empty">Could not load: ${esc(e.message)}. Is the app running?</div>`; }
+}
+document.getElementById('tabs').onclick = e => {
+  const t = e.target.dataset.tab; if (!t) return;
+  state.tab = t; store.set('pg.tab', t);
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  render();
+};
+async function init() {
+  try { state.people = await api('/people'); } catch { state.people = []; }
+  const sel = document.getElementById('person');
+  sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
+  if (state.person) sel.value = state.person;
+  sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); };
+  const saved = store.get('pg.tab');
+  if (saved && views[saved]) document.querySelector(`#tabs [data-tab="${saved}"]`).click(); else render();
+  setInterval(() => { if (!$view.querySelector('input:focus, select:focus')) render(); }, 10000);
+}
+init();
+</script>
+</body>
+</html>

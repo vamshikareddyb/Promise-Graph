@@ -4,15 +4,14 @@ import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_MAIN;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.promisegraph.RecordingNotifier;
+import dev.promisegraph.TestStack;
 import dev.promisegraph.domain.Ids;
 import dev.promisegraph.domain.Message;
 import dev.promisegraph.domain.Promise;
 import dev.promisegraph.domain.PromiseEvent;
 import dev.promisegraph.domain.PromiseStatus;
 import dev.promisegraph.domain.TimingPolicy;
-import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.ingestion.ExtractionInput;
-import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.InMemoryRepository;
 import dev.promisegraph.temporal.Contracts.PromiseSignal;
 import dev.promisegraph.temporal.Contracts.PromiseWorkflowInput;
@@ -45,11 +44,10 @@ class WorkflowTest {
     void setUp() {
         env = TestWorkflowEnvironment.newInstance();
         client = env.getWorkflowClient();
-        repo = new InMemoryRepository();
-        notifier = new RecordingNotifier();
-        Workers.register(env::newWorker,
-                new PromiseActivitiesImpl(repo, notifier, TimingPolicy.defaults(), 0.8, client),
-                new ModelActivitiesImpl(new RuleBasedExtractor(), Company.directory()), 2);
+        TestStack stack = new TestStack(env);
+        repo = stack.repo;
+        notifier = stack.recorded;
+        stack.register(env);
         env.start();
     }
 
@@ -118,7 +116,7 @@ class WorkflowTest {
         env.sleep(Duration.ofHours(25));
 
         String newDue = LocalDate.ofInstant(now().plus(Duration.ofDays(20)), ZoneOffset.UTC).toString();
-        PromiseSignal slip = new PromiseSignal("slip", "msg-slip", "neha", newDue, null, "will slip", "");
+        PromiseSignal slip = new PromiseSignal("slip", "msg-slip", "neha", newDue, null, "will slip", "", null);
         wf.event(slip);
         wf.event(slip); // duplicate delivery
         env.sleep(Duration.ofMinutes(1));

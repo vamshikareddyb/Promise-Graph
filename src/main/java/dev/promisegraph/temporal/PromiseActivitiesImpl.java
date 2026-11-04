@@ -13,11 +13,17 @@ import dev.promisegraph.domain.PromiseEvent;
 import dev.promisegraph.domain.PromiseStatus;
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Detect;
+import dev.promisegraph.handoff.Absence;
+import dev.promisegraph.handoff.AbsenceDetector;
 import dev.promisegraph.ingestion.ExtractionInput;
+import dev.promisegraph.links.Link;
+import dev.promisegraph.links.LinkSuggester;
 import dev.promisegraph.notify.Notification;
 import dev.promisegraph.notify.Notifier;
+import dev.promisegraph.store.LinkStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.Contracts.Action;
+import dev.promisegraph.temporal.Contracts.ClaimResult;
 import dev.promisegraph.temporal.Contracts.DigestRequest;
 import dev.promisegraph.temporal.Contracts.DispatchRequest;
 import dev.promisegraph.temporal.Contracts.PromiseSignal;
@@ -58,13 +64,16 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
     private static final Logger log = LoggerFactory.getLogger(PromiseActivitiesImpl.class);
 
     private final Repository repo;
+    private final LinkStore links;
     private final Notifier notifier;
     private final TimingPolicy policy;
     private final double confidenceThreshold;
     private final WorkflowClient client;
 
-    public PromiseActivitiesImpl(Repository repo, Notifier notifier, TimingPolicy policy, double confidenceThreshold, WorkflowClient client) {
+    public PromiseActivitiesImpl(Repository repo, LinkStore links, Notifier notifier, TimingPolicy policy,
+            double confidenceThreshold, WorkflowClient client) {
         this.repo = repo;
+        this.links = links;
         this.notifier = notifier;
         this.policy = policy;
         this.confidenceThreshold = confidenceThreshold;
@@ -72,15 +81,20 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
     }
 
     @Override
-    public List<Message> claimMessages(ExtractionInput input) {
+    public ClaimResult claimMessages(ExtractionInput input) {
         String claimant = Activity.getExecutionContext().getInfo().getWorkflowId();
         List<Message> kept = new ArrayList<>();
+        List<Absence> absences = new ArrayList<>();
         for (Message m : input.messages()) {
-            if (repo.claimMessage(input.tenant(), m.id(), claimant) && Detect.looksLikeCommitment(m.text())) {
+            if (!repo.claimMessage(input.tenant(), m.id(), claimant)) {
+                continue;
+            }
+            if (Detect.looksLikeCommitment(m.text())) {
                 kept.add(m);
             }
+            AbsenceDetector.detect(m).ifPresent(absences::add);
         }
-        return kept;
+        return new ClaimResult(kept, absences);
     }
 
     @Override
@@ -95,6 +109,7 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
         Set<String> existing = new HashSet<>(repo.existingIds(req.tenant(), candidateIds));
 
         List<Action> actions = new ArrayList<>();
+        List<Promise> linkCandidates = null; // every open promise, loaded only if a dependency phrase appears
         for (Commitment c : req.commitments()) {
             Resolution r = Matching.resolve(c, open, req.tenant(), req.now(), existing);
             switch (r.action()) {
@@ -103,6 +118,13 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
                         repo.createPromise(r.promise());
                         open.add(r.promise());
                         existing.add(r.promise().id());
+                        if (linkCandidates == null && LinkSuggester.hasDependencyPhrase(c.quote())) {
+                            linkCandidates = new ArrayList<>(repo.promisesByStatus(req.tenant(), OPEN));
+                        }
+                        if (linkCandidates != null) {
+                            suggestLink(req, r.promise(), c.quote(), linkCandidates);
+                            linkCandidates.add(r.promise());
+                        }
                     }
                     Promise p = r.promise() != null ? r.promise() : repo.getPromise(req.tenant(), r.promiseId()).orElse(null);
                     if (p != null) {
@@ -113,12 +135,32 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
                     String kind = r.action().name().toLowerCase(Locale.ROOT);
                     String due = r.action() == Matching.Action.SLIP ? r.due() : c.due();
                     actions.add(new Action("signal", r.promiseId(), null,
-                            new PromiseSignal(kind, c.messageId(), c.owner(), due, null, c.quote(), c.channel())));
+                            new PromiseSignal(kind, c.messageId(), c.owner(), due, null, c.quote(), c.channel(), null)));
                 }
                 case IGNORE -> log.info("ignored {} from {}: {}", c.kind(), c.messageId(), r.reason());
             }
         }
         return actions;
+    }
+
+    private static final EnumSet<PromiseStatus> OPEN = EnumSet.of(PromiseStatus.DETECTED, PromiseStatus.ACTIVE, PromiseStatus.AT_RISK);
+
+    /** Records a suggested dependency and asks the new promise's owner to confirm it. */
+    private void suggestLink(ResolveRequest req, Promise promise, String quote, List<Promise> candidates) {
+        LinkSuggester.suggest(promise, quote, candidates).ifPresent(s -> {
+            if (links.getLink(req.tenant(), s.upstreamId(), promise.id()).isPresent()) {
+                return; // already suggested, confirmed or rejected
+            }
+            links.addLink(new Link(req.tenant(), s.upstreamId(), promise.id(), Link.Status.SUGGESTED,
+                    s.clause(), "rules", null, req.now()));
+            Promise upstream = candidates.stream().filter(p -> p.id().equals(s.upstreamId())).findFirst().orElseThrow();
+            String text = "Does \"" + promise.what() + "\" depend on " + upstream.owner() + "'s promise to "
+                    + upstream.what() + (upstream.due() == null ? "" : " (due " + upstream.due() + ")")
+                    + "? You wrote: \"" + s.clause() + "\". If it does, I'll warn you when that promise slips.";
+            sendNotification(new Notification(req.tenant(), promise.owner(), text,
+                    Ids.notificationKey(req.tenant(), "link", s.upstreamId(), promise.id()),
+                    List.of("confirm link", "not related"), promise.id(), "link:" + s.upstreamId() + ">" + promise.id()));
+        });
     }
 
     @Override
@@ -195,7 +237,7 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
         for (var entry : byOwner.entrySet()) {
             String text = "Your promises today:\n- " + String.join("\n- ", entry.getValue());
             String key = Ids.notificationKey(req.tenant(), "digest", entry.getKey(), now.toLocalDate().toString());
-            if (sendNotification(new Notification(req.tenant(), entry.getKey(), text, key, List.of(), null))) {
+            if (sendNotification(Notification.about(req.tenant(), entry.getKey(), text, key, List.of(), null))) {
                 sent++;
             }
         }

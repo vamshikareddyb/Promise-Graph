@@ -1,9 +1,9 @@
 package dev.promisegraph.temporal;
 
-import dev.promisegraph.domain.Message;
 import dev.promisegraph.ingestion.ExtractionInput;
 import dev.promisegraph.notify.Notification;
 import dev.promisegraph.temporal.Contracts.Action;
+import dev.promisegraph.temporal.Contracts.ClaimResult;
 import dev.promisegraph.temporal.Contracts.DigestRequest;
 import dev.promisegraph.temporal.Contracts.DispatchRequest;
 import dev.promisegraph.temporal.Contracts.RecordRequest;
@@ -15,8 +15,11 @@ import java.util.List;
 @ActivityInterface
 public interface PromiseActivities {
 
-    /** Drops messages another batch already handled, then applies the cheap filter. */
-    List<Message> claimMessages(ExtractionInput input);
+    /**
+     * Drops messages another batch already handled, applies the cheap commitment filter, and
+     * picks out planned absences.
+     */
+    ClaimResult claimMessages(ExtractionInput input);
 
     List<Action> resolveCommitments(ResolveRequest request);
 

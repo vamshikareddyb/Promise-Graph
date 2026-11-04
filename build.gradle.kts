@@ -27,6 +27,9 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("io.temporal:temporal-testing:$temporalVersion")
+    // Versions come from Spring Boot's dependency management.
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -71,6 +74,14 @@ tasks.register<JavaExec>("gmailAuth") {
     )
 }
 
+// Gate 2: links, ripple, absences and cover picks on the hand-written core scenario.
+tasks.register<JavaExec>("evalGate2") {
+    group = "verification"
+    description = "Evaluates links, ripple and handoff planning on the core scenario (Gate 2)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "dev.promisegraph.eval.CoordinationEval"
+}
+
 tasks.named("check") {
-    dependsOn("evalGate")
+    dependsOn("evalGate", "evalGate2")
 }

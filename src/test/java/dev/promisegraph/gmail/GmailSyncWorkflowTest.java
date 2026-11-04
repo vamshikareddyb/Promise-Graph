@@ -3,19 +3,13 @@ package dev.promisegraph.gmail;
 import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_MAIN;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.promisegraph.RecordingNotifier;
+import dev.promisegraph.TestStack;
 import dev.promisegraph.domain.Message;
 import dev.promisegraph.domain.Promise;
-import dev.promisegraph.domain.TimingPolicy;
-import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.gmail.GmailSyncContracts.FetchRequest;
 import dev.promisegraph.gmail.GmailSyncContracts.FetchResult;
 import dev.promisegraph.gmail.GmailSyncContracts.SyncState;
-import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.InMemoryRepository;
-import dev.promisegraph.temporal.ModelActivitiesImpl;
-import dev.promisegraph.temporal.PromiseActivitiesImpl;
-import dev.promisegraph.temporal.Workers;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.testing.TestWorkflowEnvironment;
@@ -60,11 +54,9 @@ class GmailSyncWorkflowTest {
     @BeforeEach
     void setUp() {
         env = TestWorkflowEnvironment.newInstance();
-        repo = new InMemoryRepository();
-        WorkflowClient client = env.getWorkflowClient();
-        Worker main = Workers.register(env::newWorker,
-                new PromiseActivitiesImpl(repo, new RecordingNotifier(), TimingPolicy.defaults(), 0.8, client),
-                new ModelActivitiesImpl(new RuleBasedExtractor(), Company.directory()), 2);
+        TestStack stack = new TestStack(env);
+        repo = stack.repo;
+        Worker main = stack.register(env);
         gmail = new ScriptedGmail(Instant.ofEpochMilli(env.currentTimeMillis()).atOffset(ZoneOffset.UTC).toString());
         main.registerActivitiesImplementations(gmail);
         env.start();

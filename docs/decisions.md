@@ -57,3 +57,47 @@ The project moved from Python to Java 21 after Phase 1. Gradle (Kotlin DSL) buil
 Boot provides configuration, the webhook endpoint and JDBC. Temporal workers are wired by hand
 rather than through the Spring Boot starter, so the same `Workers.register` code runs in the
 application and in the time-skipping workflow tests.
+
+## 10. Links are suggestions until a person confirms them
+
+A wrong dependency causes false alarms, which teach people to ignore the system. So links found in
+text start as suggestions, the owner confirms or rejects them in the inbox, and only confirmed
+links drive ripple alerts. A rejected link is never suggested again.
+
+## 11. Ripple runs as its own workflow, started by the promise that changed
+
+When a promise's date moves later or it is missed, its workflow starts a `RippleWorkflow` as a
+child with an "abandon" parent-close policy, so the ripple finishes even if the promise closes
+right away. Its ID includes the promise's version, so each change ripples once. Affected promises
+learn about it through a signal and change their own state; nothing else writes to them.
+
+## 12. New workflow behavior is versioned
+
+Starting a ripple adds commands to `PromiseWorkflow`'s history. It is wrapped in
+`Workflow.getVersion("ripple-on-slip", …)`, so promise workflows that started before Phase 2
+replay without it and keep running safely. Future changes to running workflows follow the same rule.
+
+## 13. Handoffs move ownership, then move it back
+
+A handoff changes the promise's owner on the first day away and back the day after, through a
+`reassign` signal, rather than adding a second "delegate" field. Reminders and inbox items then
+simply go to whoever owns the promise. On return, a promise goes back only if the cover still owns
+it, so a later reassignment is never undone.
+
+## 14. The agent plans; rules check and back it up
+
+The handoff agent only gets read-only tools, a step limit, and a `propose` tool that refuses
+anyone the rules consider unavailable. Promise text is treated as data. If the model fails,
+stops early or skips a promise, the rule-based plan fills the gap, so a handoff never stalls on
+the model. Tests drive the loop with a scripted model.
+
+## 15. One web inbox for every question
+
+Every notification is stored as an inbox item with the buttons that answer it. A button press
+becomes a signal whose source is the item and action, so a double click acts once, and the item
+is marked done only after the signal is delivered.
+
+## 16. Records crossing Temporal have exactly one constructor
+
+Jackson builds records through their canonical constructor. Extra constructors on those records
+were replaced with named factories (`Notification.about`), so deserialization never has to choose.

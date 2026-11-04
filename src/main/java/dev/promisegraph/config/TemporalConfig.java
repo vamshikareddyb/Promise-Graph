@@ -3,11 +3,19 @@ package dev.promisegraph.config;
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Extractor;
 import dev.promisegraph.gmail.GmailActivitiesImpl;
+import dev.promisegraph.handoff.Directory;
+import dev.promisegraph.handoff.HandoffPlanning;
+import dev.promisegraph.handoff.HandoffScheduler;
 import dev.promisegraph.notify.Notifier;
 import dev.promisegraph.sim.Company;
+import dev.promisegraph.store.HandoffStore;
+import dev.promisegraph.store.LinkStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.DigestWorkflow;
+import dev.promisegraph.temporal.HandoffActivitiesImpl;
+import dev.promisegraph.temporal.LinkActivitiesImpl;
 import dev.promisegraph.temporal.ModelActivitiesImpl;
+import dev.promisegraph.temporal.PlanningActivitiesImpl;
 import dev.promisegraph.temporal.PromiseActivitiesImpl;
 import dev.promisegraph.temporal.Workers;
 import io.temporal.client.WorkflowClient;
@@ -54,22 +62,34 @@ public class TemporalConfig {
     }
 
     @Bean
-    PromiseActivitiesImpl promiseActivities(Repository repo, Notifier notifier, TimingPolicy policy,
+    PromiseActivitiesImpl promiseActivities(Repository repo, LinkStore links, Notifier notifier, TimingPolicy policy,
             PromiseGraphProperties props, WorkflowClient client) {
-        return new PromiseActivitiesImpl(repo, notifier, policy, props.confidenceThreshold(), client);
+        return new PromiseActivitiesImpl(repo, links, notifier, policy, props.confidenceThreshold(), client);
     }
 
     @Bean
     ModelActivitiesImpl modelActivities(Extractor extractor) {
-        // Phase 1 uses the simulated company as its directory. A directory sync replaces this later.
+        // The simulated company is the directory for now. A directory sync replaces this later.
         return new ModelActivitiesImpl(extractor, Company.directory());
     }
 
+    @Bean
+    Workers.Activities activities(PromiseActivitiesImpl promises, ModelActivitiesImpl model, Repository repo, LinkStore links,
+            HandoffStore handoffs, HandoffScheduler scheduler, HandoffPlanning.Planner planner, Directory directory,
+            WorkflowClient client) {
+        return new Workers.Activities(
+                promises,
+                new LinkActivitiesImpl(repo, links, promises, client),
+                new HandoffActivitiesImpl(repo, handoffs, scheduler, promises, client),
+                model,
+                new PlanningActivitiesImpl(planner, repo, links, handoffs, directory));
+    }
+
     @Bean(destroyMethod = "shutdown")
-    WorkerFactory workerFactory(WorkflowClient client, PromiseActivitiesImpl activities, ModelActivitiesImpl model,
-            PromiseGraphProperties props, ObjectProvider<GmailActivitiesImpl> gmailActivities) {
+    WorkerFactory workerFactory(WorkflowClient client, Workers.Activities activities, PromiseGraphProperties props,
+            ObjectProvider<GmailActivitiesImpl> gmailActivities) {
         WorkerFactory factory = WorkerFactory.newInstance(client);
-        Worker main = Workers.register(factory::newWorker, activities, model, props.llmMaxConcurrency());
+        Worker main = Workers.register(factory::newWorker, activities, props.llmMaxConcurrency());
         // Present only when promisegraph.gmail.enabled=true. Registered before the factory starts.
         gmailActivities.ifAvailable(main::registerActivitiesImplementations);
         return factory;

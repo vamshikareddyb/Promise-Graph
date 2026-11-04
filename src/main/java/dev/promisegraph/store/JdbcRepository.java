@@ -153,7 +153,7 @@ public final class JdbcRepository implements Repository {
     @Override
     public boolean savePromise(Promise p) {
         Boolean saved = tx.execute(s -> {
-            int rows = jdbc.update("UPDATE promises SET recipient = :recipient, what = :what, due = :due, status = :status, "
+            int rows = jdbc.update("UPDATE promises SET owner_id = :owner, recipient = :recipient, what = :what, due = :due, status = :status, "
                     + "confidence = :confidence, updated_at = :updated, version = :version "
                     + "WHERE tenant = :t AND id = :id AND version < :version", params(p));
             if (rows == 0) {

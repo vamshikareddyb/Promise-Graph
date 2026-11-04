@@ -13,24 +13,29 @@ public final class Workers {
 
     private Workers() {}
 
+    /** Every activity implementation, grouped by the task queue it runs on. */
+    public record Activities(
+            PromiseActivities promises,
+            LinkActivities links,
+            HandoffActivities handoffs,
+            ModelActivities model,
+            PlanningActivities planning) {}
+
     /**
      * @param newWorker creates a worker for a task queue, e.g. {@code factory::newWorker}
      *     or {@code testEnv::newWorker}
      * @return the main-queue worker, for optional sources such as Gmail to add their activities
      */
-    public static Worker register(
-            BiFunction<String, WorkerOptions, Worker> newWorker,
-            PromiseActivities activities,
-            ModelActivities modelActivities,
-            int modelConcurrency) {
+    public static Worker register(BiFunction<String, WorkerOptions, Worker> newWorker, Activities activities, int modelConcurrency) {
         Worker main = newWorker.apply(TASK_QUEUE_MAIN, WorkerOptions.getDefaultInstance());
         main.registerWorkflowImplementationTypes(ExtractionWorkflowImpl.class, PromiseWorkflowImpl.class,
-                DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class);
-        main.registerActivitiesImplementations(activities);
+                DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class, RippleWorkflowImpl.class, HandoffWorkflowImpl.class);
+        main.registerActivitiesImplementations(activities.promises(), activities.links(), activities.handoffs());
 
+        // Model calls (extraction, the handoff agent) get their own queue and a concurrency cap.
         Worker llm = newWorker.apply(TASK_QUEUE_LLM,
                 WorkerOptions.newBuilder().setMaxConcurrentActivityExecutionSize(modelConcurrency).build());
-        llm.registerActivitiesImplementations(modelActivities);
+        llm.registerActivitiesImplementations(activities.model(), activities.planning());
         return main;
     }
 }
