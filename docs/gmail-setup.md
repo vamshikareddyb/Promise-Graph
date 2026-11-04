@@ -77,6 +77,15 @@ batch of emails, and a `promise-…` workflow for each promise found.
 | `PG_GMAIL_POLL_INTERVAL` | `60s` | How often to check for new mail |
 | `PG_GMAIL_BACKFILL_DAYS` | `2` | How far back the first sync reads (1–30) |
 
+## Who sees what
+
+With Gmail connected, the app is yours alone. "Viewing as" shows only the connected account, which
+sees every promise found in the mailbox: the ones you made and the ones other people made to you.
+Any other viewer is refused. The demo company's people are not offered.
+
+Not every email becomes a promise: only sentences that commit to something, such as "I'll send you
+the report by Friday". To try it, send yourself an email like that from another account.
+
 ## What gets read
 
 - **Read:** your sent mail and your inbox's Primary category.

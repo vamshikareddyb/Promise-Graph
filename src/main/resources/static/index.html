@@ -378,6 +378,8 @@ async function init() {
   sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.lead ? ' (lead)' : ''}</option>`).join('');
   state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
   if (state.person) sel.value = state.person;
+  // With Gmail connected the only viewer is that account, so say so instead of offering a choice.
+  if (state.people.length === 1) { document.querySelector('.who').firstChild.textContent = 'Gmail account '; sel.disabled = true; }
   sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); };
   const saved = store.get('pg.tab');
   if (saved && views[saved]) document.querySelector(`#tabs [data-tab="${saved}"]`).click(); else render();

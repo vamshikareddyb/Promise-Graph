@@ -5,6 +5,7 @@ import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Extractor;
 import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.extraction.model.AnthropicExtractor;
+import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.handoff.Directory;
 import dev.promisegraph.handoff.HandoffPlanning;
 import dev.promisegraph.handoff.HandoffScheduler;
@@ -39,6 +40,7 @@ import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowExecutionAlreadyStarted;
 import io.temporal.client.WorkflowOptions;
 import java.time.Clock;
+import java.util.Optional;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -149,8 +151,9 @@ public class AppConfig {
     }
 
     @Bean
-    Visibility visibility(Directory directory, PrivacyProperties privacy) {
-        return new Visibility(directory, privacy.admins());
+    Visibility visibility(Directory directory, PrivacyProperties privacy, ObjectProvider<MailboxOwner> mailbox) {
+        return new Visibility(directory, privacy.admins(),
+                () -> Optional.ofNullable(mailbox.getIfAvailable()).flatMap(MailboxOwner::email));
     }
 
     // ------------------------------------------------------------ negotiations

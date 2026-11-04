@@ -5,6 +5,7 @@ import dev.promisegraph.domain.Person;
 import dev.promisegraph.domain.Promise;
 import dev.promisegraph.domain.PromiseStatus;
 import dev.promisegraph.handoff.Absence;
+import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.handoff.Directory;
 import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.handoff.HandoffScheduler;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -93,11 +95,13 @@ public class ApiController {
     private final NegotiationStore negotiations;
     private final Visibility visibility;
     private final AuditLog audit;
+    private final ObjectProvider<MailboxOwner> mailbox;
 
     public ApiController(PromiseGraphProperties props, Repository repo, LinkStore links, InboxStore inbox, HandoffStore handoffs,
             Directory directory, InboxService inboxService, HandoffScheduler scheduler, Signals signals, NegotiationStore negotiations,
-            Visibility visibility, AuditLog audit) {
+            Visibility visibility, AuditLog audit, ObjectProvider<MailboxOwner> mailbox) {
         this.tenant = props.tenant();
+        this.mailbox = mailbox;
         this.repo = repo;
         this.links = links;
         this.inbox = inbox;
@@ -138,8 +142,19 @@ public class ApiController {
 
     // ------------------------------------------------------------ people
 
+    /**
+     * Who can be chosen as the viewer. With Gmail connected, that is only the connected account:
+     * the app is personal, and the demo company's people don't belong in it.
+     */
     @GetMapping("/people")
     public List<PersonView> people() {
+        MailboxOwner owner = mailbox.getIfAvailable();
+        if (owner != null) {
+            String email = owner.email().orElseThrow(() -> new InboxService.ActionException(503,
+                    "Gmail is connected but could not be reached to find your account; check the app log, "
+                            + "or sign in again with gradlew gmailAuth"));
+            return List.of(new PersonView(email, email, "", "", true));
+        }
         Map<String, PersonView> out = new LinkedHashMap<>();
         for (Person p : directory.people()) {
             out.put(p.id(), new PersonView(p.id(), p.name(), p.team(), p.role(), p.lead()));

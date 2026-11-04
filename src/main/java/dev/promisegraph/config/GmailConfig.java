@@ -6,6 +6,7 @@ import dev.promisegraph.gmail.GmailRestApi;
 import dev.promisegraph.gmail.GmailSyncContracts.SyncState;
 import dev.promisegraph.gmail.GmailSyncWorkflow;
 import dev.promisegraph.gmail.GoogleOAuth;
+import dev.promisegraph.gmail.MailboxOwner;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowExecutionAlreadyStarted;
 import io.temporal.client.WorkflowOptions;
@@ -29,6 +30,12 @@ public class GmailConfig {
     GmailApi gmailApi(GmailProperties gmail) throws IOException {
         var secrets = GoogleOAuth.ClientSecrets.load(Path.of(gmail.credentialsFile()));
         return new GmailRestApi(new GoogleOAuth(secrets, Path.of(gmail.tokenFile())));
+    }
+
+    /** With Gmail connected, the app is personal: its one user is the connected account. */
+    @Bean
+    MailboxOwner mailboxOwner(GmailApi api) {
+        return new MailboxOwner(() -> api.profile().emailAddress());
     }
 
     @Bean
