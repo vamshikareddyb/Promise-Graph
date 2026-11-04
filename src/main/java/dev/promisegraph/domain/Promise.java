@@ -42,6 +42,11 @@ public record Promise(
         return new Promise(id, tenant, owner, what, status, confidence, createdAt, updatedAt, recipient, d, channel, evidence, version);
     }
 
+    /** Used by handoffs: someone else covers the promise while its owner is away. */
+    public Promise withOwner(String o) {
+        return new Promise(id, tenant, o, what, status, confidence, createdAt, updatedAt, recipient, due, channel, evidence, version);
+    }
+
     public Promise withWhat(String w) {
         return new Promise(id, tenant, owner, w, status, confidence, createdAt, updatedAt, recipient, due, channel, evidence, version);
     }

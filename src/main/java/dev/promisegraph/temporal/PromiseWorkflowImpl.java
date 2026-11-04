@@ -1,5 +1,6 @@
 package dev.promisegraph.temporal;
 
+import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_MAIN;
 import static dev.promisegraph.domain.PromiseStatus.ACTIVE;
 import static dev.promisegraph.domain.PromiseStatus.AT_RISK;
 import static dev.promisegraph.domain.PromiseStatus.CANCELLED;
@@ -18,6 +19,10 @@ import dev.promisegraph.notify.Notification;
 import dev.promisegraph.temporal.Contracts.PromiseSignal;
 import dev.promisegraph.temporal.Contracts.PromiseWorkflowInput;
 import dev.promisegraph.temporal.Contracts.RecordRequest;
+import dev.promisegraph.temporal.Contracts.RippleRequest;
+import io.temporal.api.enums.v1.ParentClosePolicy;
+import io.temporal.workflow.Async;
+import io.temporal.workflow.ChildWorkflowOptions;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
 import java.time.Instant;
@@ -47,6 +52,8 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
     private static final Logger log = Workflow.getLogger(PromiseWorkflowImpl.class);
     private static final String NUDGE_KEY = "nudge:missing-date";
     private static final String REMINDER_PREFIX = "reminder:";
+    /** Phase 2 added ripple on slips; histories recorded before it replay without it. */
+    static final String RIPPLE_CHANGE = "ripple-on-slip";
 
     private final PromiseActivities io = Workflow.newActivityStub(PromiseActivities.class, RetryPolicies.io(Duration.ofSeconds(30)));
 
@@ -201,6 +208,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
     private void markBroken() {
         if (set(PromiseStatus.BROKEN)) {
             record("broken", "system", Map.of("due", promise.due()));
+            ripple(promise.due(), null, "missed");
             notify(promise.owner(), "Marked as missed: " + promise.what() + " (due " + promise.due() + ").", List.of(), "broken");
             if (promise.recipient() != null) {
                 notify(promise.recipient(), promise.owner() + " missed: " + promise.what() + " (due " + promise.due() + ").",
@@ -222,11 +230,15 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
         PromiseStatus status = promise.status();
         switch (s.kind()) {
             case "confirm" -> {
+                String oldDue = promise.due();
                 Map<String, String> edits = applyEdits(s);
                 if ((status == DETECTED || status == AT_RISK) && set(ACTIVE)) {
                     record("confirmed", s.actor(), edits);
                 } else if (!edits.isEmpty()) {
                     record("edited", s.actor(), edits);
+                }
+                if (later(oldDue, promise.due())) {
+                    ripple(oldDue, promise.due(), "slipped");
                 }
             }
             case "dismiss" -> {
@@ -241,6 +253,9 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
                     String old = promise.due();
                     promise = promise.withDue(s.due());
                     record("date_changed", s.actor(), details("old_due", old, "new_due", s.due()));
+                    if (later(old, s.due())) {
+                        ripple(old, s.due(), "slipped");
+                    }
                 } else {
                     record("restated", s.actor(), Map.of());
                 }
@@ -255,6 +270,9 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
                     set(AT_RISK);
                 }
                 record("slipped", s.actor(), details("old_due", old, "new_due", promise.due()));
+                if (s.due() == null || later(old, s.due())) {
+                    ripple(old, s.due() == null ? null : promise.due(), "slipped"); // no new date: "may be delayed"
+                }
                 String when = promise.due() == null ? "a later date" : promise.due();
                 notify(promise.owner(), "Noted: " + promise.what() + " moves to " + when + ". Confirm the new date?",
                         List.of("confirm"), "slip", s.sourceId());
@@ -275,6 +293,29 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
             case "cancel" -> {
                 if (set(CANCELLED)) {
                     record("cancelled", s.actor(), Map.of());
+                }
+            }
+            case "upstream_risk" -> {
+                // From a ripple: something this promise depends on slipped. The owner decides.
+                if (status == ACTIVE) {
+                    set(AT_RISK);
+                }
+                record("upstream_slipped", s.actor(), details("upstream", s.what(), "likely_due", s.due()));
+                String due = promise.due() == null ? "" : " (due " + promise.due() + ")";
+                String likely = s.due() == null ? ", so it may be delayed" : ", so it now looks likely around " + s.due();
+                notify(promise.owner(), s.what() + ". Your promise to " + promise.what() + due + " depends on it" + likely
+                        + ". Keep your date or set a new one?", List.of("keep date", "new date"), "upstream", s.sourceId());
+            }
+            case "reassign" -> {
+                // From a handoff: someone else covers this promise, or its owner is back.
+                String to = s.newOwner();
+                if (to != null && !to.equals(promise.owner())) {
+                    String from = promise.owner();
+                    promise = promise.withOwner(to);
+                    record("reassigned", s.actor(), details("from", from, "to", to));
+                    String due = promise.due() == null ? "" : " (due " + promise.due() + ")";
+                    notify(to, "You now own the promise to " + promise.what() + due + ", handed over from " + from + ".",
+                            List.of("kept", "new date"), "reassigned", s.sourceId());
                 }
             }
             default -> log.warn("unknown signal kind {}", s.kind());
@@ -309,6 +350,28 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
         return m;
     }
 
+    private static boolean later(String oldDue, String newDue) {
+        return oldDue != null && newDue != null && LocalDate.parse(newDue).isAfter(LocalDate.parse(oldDue));
+    }
+
+    /**
+     * Starts a ripple for this change and waits only until it has started. The ripple outlives this
+     * workflow (a missed promise closes right after), and its ID is unique per recorded change.
+     */
+    private void ripple(String oldDue, String newDue, String cause) {
+        if (Workflow.getVersion(RIPPLE_CHANGE, Workflow.DEFAULT_VERSION, 1) == Workflow.DEFAULT_VERSION) {
+            return;
+        }
+        ChildWorkflowOptions options = ChildWorkflowOptions.newBuilder()
+                .setWorkflowId("ripple-" + promise.id() + "-v" + promise.version())
+                .setTaskQueue(TASK_QUEUE_MAIN)
+                .setParentClosePolicy(ParentClosePolicy.PARENT_CLOSE_POLICY_ABANDON)
+                .build();
+        RippleWorkflow child = Workflow.newChildWorkflowStub(RippleWorkflow.class, options);
+        Async.function(child::run, new RippleRequest(promise.tenant(), promise.id(), oldDue, newDue, cause));
+        Workflow.getWorkflowExecution(child).get();
+    }
+
     private boolean set(PromiseStatus target) {
         if (!Lifecycle.canTransition(promise.status(), target)) {
             log.info("ignored transition {} -> {}", promise.status(), target);
@@ -327,7 +390,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
         List<String> parts = new ArrayList<>(List.of(promise.tenant(), promise.id(), recipient));
         parts.addAll(List.of(keyParts));
         String key = Ids.notificationKey(parts.toArray(String[]::new));
-        io.sendNotification(new Notification(promise.tenant(), recipient, text, key, actions, promise.id()));
+        io.sendNotification(Notification.about(promise.tenant(), recipient, text, key, actions, promise.id()));
     }
 
     private void announce() {
