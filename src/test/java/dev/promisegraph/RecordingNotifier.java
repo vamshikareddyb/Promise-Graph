@@ -15,6 +15,14 @@ public final class RecordingNotifier implements Notifier {
         sent.add(notification);
     }
 
+    public synchronized List<String> keys() {
+        return sent.stream().map(Notification::key).toList();
+    }
+
+    public synchronized int count() {
+        return sent.size();
+    }
+
     public synchronized List<String> textsFor(String recipient) {
         return sent.stream().filter(n -> n.recipient().equals(recipient)).map(Notification::text).toList();
     }

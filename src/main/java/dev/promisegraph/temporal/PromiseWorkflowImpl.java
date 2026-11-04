@@ -52,7 +52,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
     private static final Logger log = Workflow.getLogger(PromiseWorkflowImpl.class);
     private static final String NUDGE_KEY = "nudge:missing-date";
     private static final String REMINDER_PREFIX = "reminder:";
-    /** Phase 2 added ripple on slips; histories recorded before it replay without it. */
+    /** Phase 2 added ripple on slips (version 1, a child workflow); Phase 4 starts it from an activity (version 2). */
     static final String RIPPLE_CHANGE = "ripple-on-slip";
 
     private final PromiseActivities io = Workflow.newActivityStub(PromiseActivities.class, RetryPolicies.io(Duration.ofSeconds(30)));
@@ -237,7 +237,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
                 } else if (!edits.isEmpty()) {
                     record("edited", s.actor(), edits);
                 }
-                if (later(oldDue, promise.due())) {
+                if (later(oldDue, promise.due()) && !fromPlan(s)) {
                     ripple(oldDue, promise.due(), "slipped");
                 }
             }
@@ -253,7 +253,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
                     String old = promise.due();
                     promise = promise.withDue(s.due());
                     record("date_changed", s.actor(), details("old_due", old, "new_due", s.due()));
-                    if (later(old, s.due())) {
+                    if (later(old, s.due()) && !fromPlan(s)) {
                         ripple(old, s.due(), "slipped");
                     }
                 } else {
@@ -350,25 +350,42 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
         return m;
     }
 
+    /**
+     * Changes made by an agreed recovery plan don't ripple again: the plan already covered every
+     * promise downstream, and a ripple would start a second negotiation about the same slip.
+     */
+    private static boolean fromPlan(PromiseSignal s) {
+        return s.sourceId() != null && s.sourceId().startsWith("plan:");
+    }
+
     private static boolean later(String oldDue, String newDue) {
         return oldDue != null && newDue != null && LocalDate.parse(newDue).isAfter(LocalDate.parse(oldDue));
     }
 
     /**
-     * Starts a ripple for this change and waits only until it has started. The ripple outlives this
-     * workflow (a missed promise closes right after), and its ID is unique per recorded change.
+     * Starts a ripple for this change. Its ID is unique per recorded change, so a retry starts
+     * nothing new. Version 1 started it as an abandoned child; version 2 (Phase 4) starts it from
+     * an activity as a workflow of its own, because a missed promise closes right away and a ripple
+     * has nothing to report back to it.
      */
     private void ripple(String oldDue, String newDue, String cause) {
-        if (Workflow.getVersion(RIPPLE_CHANGE, Workflow.DEFAULT_VERSION, 1) == Workflow.DEFAULT_VERSION) {
+        int version = Workflow.getVersion(RIPPLE_CHANGE, Workflow.DEFAULT_VERSION, 2);
+        if (version == Workflow.DEFAULT_VERSION) {
+            return;
+        }
+        String rippleId = "ripple-" + promise.id() + "-v" + promise.version();
+        RippleRequest request = new RippleRequest(promise.tenant(), promise.id(), oldDue, newDue, cause);
+        if (version >= 2) {
+            io.startRipple(rippleId, request);
             return;
         }
         ChildWorkflowOptions options = ChildWorkflowOptions.newBuilder()
-                .setWorkflowId("ripple-" + promise.id() + "-v" + promise.version())
+                .setWorkflowId(rippleId)
                 .setTaskQueue(TASK_QUEUE_MAIN)
                 .setParentClosePolicy(ParentClosePolicy.PARENT_CLOSE_POLICY_ABANDON)
                 .build();
         RippleWorkflow child = Workflow.newChildWorkflowStub(RippleWorkflow.class, options);
-        Async.function(child::run, new RippleRequest(promise.tenant(), promise.id(), oldDue, newDue, cause));
+        Async.function(child::run, request);
         Workflow.getWorkflowExecution(child).get();
     }
 

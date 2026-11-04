@@ -7,6 +7,7 @@ import dev.promisegraph.links.Link;
 import dev.promisegraph.store.InMemoryStores;
 import dev.promisegraph.temporal.Contracts.HandoffResponse;
 import dev.promisegraph.temporal.Contracts.PromiseSignal;
+import dev.promisegraph.temporal.NegotiationContracts.Vote;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,11 @@ class InboxServiceTest {
         @Override
         public void toHandoff(String handoffId, HandoffResponse r) {
             sent.add(handoffId + " " + r.kind() + " " + r.promiseId() + " " + r.by());
+        }
+
+        @Override
+        public void toNegotiation(String negotiationId, Vote v) {
+            sent.add(negotiationId + " " + v.kind() + " r" + v.round() + " " + v.planId() + " " + v.by() + " " + v.reason() + " " + v.sourceId());
         }
     };
 
@@ -78,6 +84,17 @@ class InboxServiceTest {
         item("k4", List.of("accept", "decline"), "faq", "handoff:demo-karan-2026-11-16:faq");
         service.act("demo", "k4", new InboxService.ActionRequest("accept", "nikhil", null, null));
         assertThat(sent).containsExactly("demo-karan-2026-11-16 accept faq nikhil");
+    }
+
+    @Test
+    void planButtonsBecomeVotesForTheirRound() {
+        item("k6", List.of("approve A", "approve B", "reject all"), "api", "negotiation:demo-api-v3:2");
+        service.act("demo", "k6", new InboxService.ActionRequest("approve B", "ravi", null, null));
+        item("k7", List.of("approve A", "reject all"), "api", "negotiation:demo-api-v3:2");
+        service.act("demo", "k7", new InboxService.ActionRequest("reject all", "meera", null, "  the Acme date matters more "));
+        assertThat(sent).containsExactly(
+                "demo-api-v3 approve r2 B ravi null inbox:k6:approve B",
+                "demo-api-v3 reject r2 null meera the Acme date matters more inbox:k7:reject all");
     }
 
     @Test

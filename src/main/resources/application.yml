@@ -31,6 +31,19 @@ promisegraph:
     planner: ${PG_HANDOFF_PLANNER:rules}   # rules | agent
     prep-days: ${PG_HANDOFF_PREP_DAYS:3}
     agent-max-steps: ${PG_HANDOFF_AGENT_MAX_STEPS:12}
+  negotiation:
+    enabled: ${PG_NEGOTIATION_ENABLED:true}
+    planner: ${PG_NEGOTIATION_PLANNER:rules}   # rules | agent
+    min-teams: ${PG_NEGOTIATION_MIN_TEAMS:2}
+    capacity: ${PG_NEGOTIATION_CAPACITY:8}
+    approval-hours: ${PG_NEGOTIATION_APPROVAL_HOURS:72}
+    reminder-hours: ${PG_NEGOTIATION_REMINDER_HOURS:24}
+    max-rounds: ${PG_NEGOTIATION_MAX_ROUNDS:3}
+    agent-max-steps: ${PG_NEGOTIATION_AGENT_MAX_STEPS:12}
+    customers: ${PG_CUSTOMERS:Acme,Globex,Initech}
+    team-checks: ${PG_NEGOTIATION_TEAM_CHECKS:true}
+  privacy:
+    admins: ${PG_ADMINS:}   # comma-separated ids allowed on the operations page besides team leads
   gmail:
     enabled: ${PG_GMAIL_ENABLED:false}
     credentials-file: ${PG_GMAIL_CREDENTIALS:${user.home}/.promise-graph/gmail-credentials.json}
@@ -46,3 +59,17 @@ server:
 logging:
   level:
     dev.promisegraph: INFO
+
+management:
+  server:
+    # Metrics and health on their own port. On Linux, set PG_MANAGEMENT_ADDRESS=0.0.0.0 so the
+    # Prometheus container can reach it; the main app stays on localhost.
+    port: ${PG_MANAGEMENT_PORT:8788}
+    address: ${PG_MANAGEMENT_ADDRESS:127.0.0.1}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: promise-graph

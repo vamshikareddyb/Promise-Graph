@@ -1,6 +1,7 @@
 package dev.promisegraph.gmail;
 
 import dev.promisegraph.domain.Message;
+import dev.promisegraph.privacy.Redactor;
 import dev.promisegraph.gmail.GmailApi.GmailApiException;
 import dev.promisegraph.gmail.GmailApi.HistoryExpiredException;
 import dev.promisegraph.gmail.GmailApi.HistoryPage;
@@ -100,7 +101,7 @@ public final class GmailActivitiesImpl implements GmailActivities {
                 m = Optional.empty(); // e.g. deleted between the history call and now
             }
             if (m.isPresent()) {
-                messages.add(m.get());
+                messages.add(Redactor.redact(m.get())); // before the result enters workflow history
             } else {
                 skipped++;
             }

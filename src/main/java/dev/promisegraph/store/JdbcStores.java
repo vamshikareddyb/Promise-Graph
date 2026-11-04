@@ -7,6 +7,10 @@ import dev.promisegraph.handoff.Absence;
 import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.inbox.InboxItem;
 import dev.promisegraph.links.Link;
+import dev.promisegraph.domain.Message;
+import dev.promisegraph.ops.AuditEntry;
+import dev.promisegraph.ops.DeadLetter;
+import dev.promisegraph.recovery.NegotiationRecord;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -19,7 +23,7 @@ import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-/** Postgres link, inbox and handoff stores. Schema: migrations/002_phase2.sql. Every write is safe to repeat. */
+/** Postgres link, inbox, handoff and negotiation stores. Schema: migrations/002_phase2.sql to 004_phase4.sql. Every write is safe to repeat. */
 public final class JdbcStores {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -226,6 +230,113 @@ public final class JdbcStores {
         public List<HandoffRecord> handoffs(String tenant) {
             return jdbc.query("SELECT " + COLS + " FROM handoffs WHERE tenant = :t ORDER BY starts_on DESC",
                     new MapSqlParameterSource("t", tenant), Handoffs::row);
+        }
+    }
+
+    public static final class Negotiations implements NegotiationStore {
+        private final NamedParameterJdbcTemplate jdbc;
+
+        public Negotiations(NamedParameterJdbcTemplate jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public void save(NegotiationRecord n) {
+            jdbc.update("INSERT INTO negotiations (tenant, id, source_promise_id, status, created_at, updated_at, doc) "
+                            + "VALUES (:t, :id, :src, :st, :c, :u, CAST(:doc AS jsonb)) "
+                            + "ON CONFLICT (tenant, id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at, doc = EXCLUDED.doc",
+                    new MapSqlParameterSource("t", n.tenant()).addValue("id", n.id()).addValue("src", n.sourcePromiseId())
+                            .addValue("st", n.status()).addValue("c", ts(n.createdAt())).addValue("u", ts(n.updatedAt()))
+                            .addValue("doc", json(n)));
+        }
+
+        private static NegotiationRecord row(ResultSet rs, int i) throws SQLException {
+            return read(rs.getString("doc"), new TypeReference<NegotiationRecord>() {});
+        }
+
+        @Override
+        public Optional<NegotiationRecord> get(String tenant, String id) {
+            return jdbc.query("SELECT doc::text AS doc FROM negotiations WHERE tenant = :t AND id = :id",
+                    new MapSqlParameterSource("t", tenant).addValue("id", id), Negotiations::row).stream().findFirst();
+        }
+
+        @Override
+        public List<NegotiationRecord> list(String tenant) {
+            return jdbc.query("SELECT doc::text AS doc FROM negotiations WHERE tenant = :t ORDER BY created_at DESC LIMIT 200",
+                    new MapSqlParameterSource("t", tenant), Negotiations::row);
+        }
+
+        @Override
+        public List<NegotiationRecord> openFor(String tenant, String sourcePromiseId) {
+            return jdbc.query("SELECT doc::text AS doc FROM negotiations WHERE tenant = :t AND source_promise_id = :src "
+                            + "AND status IN ('planning', 'awaiting_approval', 'applying') ORDER BY created_at",
+                    new MapSqlParameterSource("t", tenant).addValue("src", sourcePromiseId), Negotiations::row);
+        }
+    }
+
+    public static final class DeadLetters implements DeadLetterStore {
+        private final NamedParameterJdbcTemplate jdbc;
+
+        public DeadLetters(NamedParameterJdbcTemplate jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public boolean add(DeadLetter d) {
+            return jdbc.update("INSERT INTO dead_letters (tenant, id, kind, reference, error, messages, created_at, status) "
+                            + "VALUES (:t, :id, :k, :r, :e, CAST(:m AS jsonb), :c, :s) ON CONFLICT DO NOTHING",
+                    new MapSqlParameterSource("t", d.tenant()).addValue("id", d.id()).addValue("k", d.kind())
+                            .addValue("r", d.reference()).addValue("e", d.error()).addValue("m", json(d.messages()))
+                            .addValue("c", ts(d.createdAt())).addValue("s", d.status())) == 1;
+        }
+
+        private static DeadLetter row(ResultSet rs, int i) throws SQLException {
+            return new DeadLetter(rs.getString("tenant"), rs.getString("id"), rs.getString("kind"), rs.getString("reference"),
+                    rs.getString("error"), read(rs.getString("messages"), new TypeReference<List<Message>>() {}),
+                    iso(rs.getObject("created_at", OffsetDateTime.class)), rs.getString("status"));
+        }
+
+        private static final String COLS = "tenant, id, kind, reference, error, messages::text AS messages, created_at, status";
+
+        @Override
+        public Optional<DeadLetter> get(String tenant, String id) {
+            return jdbc.query("SELECT " + COLS + " FROM dead_letters WHERE tenant = :t AND id = :id",
+                    new MapSqlParameterSource("t", tenant).addValue("id", id), DeadLetters::row).stream().findFirst();
+        }
+
+        @Override
+        public List<DeadLetter> list(String tenant, boolean openOnly) {
+            return jdbc.query("SELECT " + COLS + " FROM dead_letters WHERE tenant = :t" + (openOnly ? " AND status = 'open'" : "")
+                    + " ORDER BY created_at DESC LIMIT 500", new MapSqlParameterSource("t", tenant), DeadLetters::row);
+        }
+
+        @Override
+        public boolean setStatus(String tenant, String id, String status) {
+            return jdbc.update("UPDATE dead_letters SET status = :s WHERE tenant = :t AND id = :id",
+                    new MapSqlParameterSource("t", tenant).addValue("id", id).addValue("s", status)) == 1;
+        }
+    }
+
+    public static final class Audit implements AuditLog {
+        private final NamedParameterJdbcTemplate jdbc;
+
+        public Audit(NamedParameterJdbcTemplate jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public void record(AuditEntry e) {
+            jdbc.update("INSERT INTO audit_log (tenant, at, actor, action, target, detail) VALUES (:t, :at, :a, :ac, :tg, :d)",
+                    new MapSqlParameterSource("t", e.tenant()).addValue("at", ts(e.at())).addValue("a", e.actor())
+                            .addValue("ac", e.action()).addValue("tg", e.target()).addValue("d", e.detail()));
+        }
+
+        @Override
+        public List<AuditEntry> recent(String tenant, int limit) {
+            return jdbc.query("SELECT tenant, at, actor, action, target, detail FROM audit_log WHERE tenant = :t ORDER BY seq DESC LIMIT :n",
+                    new MapSqlParameterSource("t", tenant).addValue("n", limit),
+                    (rs, i) -> new AuditEntry(rs.getString("tenant"), iso(rs.getObject("at", OffsetDateTime.class)), rs.getString("actor"),
+                            rs.getString("action"), rs.getString("target"), rs.getString("detail")));
         }
     }
 }

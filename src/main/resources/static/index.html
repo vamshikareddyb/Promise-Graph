@@ -36,10 +36,15 @@
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
-  .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned { color: var(--good); }
-  .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled { color: var(--warn); }
-  .s-broken, .s-rejected, .s-uncovered, .s-cancelled { color: var(--bad); }
-  .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over { color: var(--muted); }
+  .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied, .s-auto_fixed, .s-retried { color: var(--good); }
+  .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled, .s-awaiting_approval, .s-applying { color: var(--warn); }
+  .s-broken, .s-rejected, .s-uncovered, .s-cancelled, .s-failed, .s-unresolved { color: var(--bad); }
+  .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over, .s-expired, .s-superseded, .s-dismissed { color: var(--muted); }
+  .plan { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .plan.chosen { border-color: var(--good); }
+  .plan h3 { font-size: 15px; margin: 0; }
+  details { margin-top: 8px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .votes { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13px; }
   .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
   .err { color: var(--bad); font-size: 13px; }
   .split { display: grid; gap: 16px; grid-template-columns: 1fr; }
@@ -57,6 +62,8 @@
     <button data-tab="links">Links</button>
     <button data-tab="graph">Graph</button>
     <button data-tab="handoffs">Handoffs</button>
+    <button data-tab="plans">Plans</button>
+    <button data-tab="ops">Ops</button>
   </nav>
   <label class="who">Viewing as <select id="person"></select></label>
 </header>
@@ -72,7 +79,9 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
 
 async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  // Until sign-in exists, the server trusts this header; it still applies every visibility rule.
+  const headers = { 'Content-Type': 'application/json', ...(state.person ? { 'X-PG-Viewer': state.person } : {}) };
+  const res = await fetch('/api' + path, { headers, ...opts });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || res.statusText);
   return body;
@@ -106,6 +115,7 @@ function card(i) {
       ${i.actions.map(a => `<button class="act ${a === i.actions[0] ? 'primary' : ''}" data-act="${esc(a)}">${esc(a)}</button>`).join('')}
       ${needsDate ? '<input type="date" aria-label="New date">' : ''}
       ${i.actions.includes('edit') ? '<input type="text" placeholder="Reword the promise (optional)" aria-label="Promise text">' : ''}
+      ${i.actions.includes('reject all') ? '<input type="text" placeholder="Why? (optional, used for the next plans)" aria-label="Reason">' : ''}
       <span class="err" role="alert"></span></div>`}
   </div>`;
 }
@@ -252,8 +262,99 @@ async function renderHandoffs() {
 }
 const alertInline = (el, msg) => { const s = document.createElement('span'); s.className = 'err'; s.textContent = ' ' + msg; el.after(s); };
 
+// ------------------------------------------------------------ recovery plans
+const OPEN_NEGOTIATION = new Set(['planning', 'awaiting_approval', 'applying']);
+const KIND = { move_date: 'New date', keep_date: 'Keeps date', deliver_partial: 'First part on date', add_helper: 'Adds a helper', reassign: 'New owner' };
+
+function moveChange(m) {
+  if (m.kind === 'move_date') return `<span style="white-space:nowrap">${esc(m.fromDue || 'no date')} → <b>${esc(m.toDue)}</b></span>`;
+  if (m.kind === 'add_helper') return `${esc(name(m.person))} helps`;
+  if (m.kind === 'reassign') return `to ${esc(name(m.person))}`;
+  return `keeps ${esc(m.fromDue || 'no date')}`;
+}
+
+function planCard(n, p, canVote) {
+  const chosen = n.chosen === p.id && ['applied', 'applying', 'failed'].includes(n.status);
+  const voters = Object.entries(n.votes || {}).filter(([, v]) => v === p.id).map(([who]) => name(who));
+  return `<div class="plan ${chosen ? 'chosen' : ''}">
+    <h3>${esc(p.id)}) ${esc(p.title)} ${chosen ? pill(n.status === 'failed' ? 'failed' : 'applied') : ''}</h3>
+    <div>${esc(p.summary)}</div>
+    ${p.score ? `<div class="meta">Cost: ${esc(p.score.datesMoved)} date(s) moved, ${esc(p.score.customerDatesMoved)} for customers · ${esc(p.score.partials)} first-part deliveries · ${esc(p.score.peopleAdded)} people added · ${esc(p.score.daysLate)} days late in total · proposed by ${esc(p.proposedBy)}</div>` : ''}
+    <table style="margin-top:8px"><thead><tr><th>Promise</th><th>Owner</th><th>Change</th><th>Why</th></tr></thead><tbody>
+      ${p.moves.map(m => `<tr><td>${esc(m.what)}</td><td>${esc(name(m.owner))}</td><td><span class="meta">${esc(KIND[m.kind] || m.kind)}</span><br>${moveChange(m)}</td><td class="meta">${esc(m.note)}</td></tr>`).join('')}
+    </tbody></table>
+    ${voters.length ? `<div class="meta">Chosen by ${voters.map(esc).join(', ')}</div>` : ''}
+    ${canVote ? `<div class="row"><button class="act primary" data-vote="${esc(p.id)}" data-n="${esc(n.id)}" data-round="${n.round}">Approve plan ${esc(p.id)}</button></div>` : ''}
+  </div>`;
+}
+
+async function renderPlans() {
+  const ns = await api('/negotiations');
+  const body = n => {
+    const canVote = n.status === 'awaiting_approval' && n.approvers.includes(state.person);
+    const votes = n.approvers.map(a => `<span>${esc(name(a))}: ${n.votes[a] ? (n.votes[a] === 'reject' ? 'rejected' : 'plan ' + esc(n.votes[a])) : '<span class="meta">waiting</span>'}</span>`).join('');
+    return `<div class="card">
+      <div><b>${esc(n.sourceWhat)}</b> <span class="meta">(${esc(name(n.sourceOwner))})</span> ${esc(n.oldDue)} → ${esc(n.newDue)} ${pill(n.status)}
+        <span class="meta"> · round ${esc(n.round)}${n.planner ? ' · plans by ' + esc(n.planner) : ''}</span></div>
+      <p class="meta" style="margin:6px 0 0">${esc(n.context)}</p>
+      ${n.status === 'awaiting_approval' ? `<div class="votes"><span class="meta">Approvers:</span>${votes}<span class="meta">Deadline ${when(n.deadline)}</span></div>` : ''}
+      ${n.plans.map(p => planCard(n, p, canVote)).join('')}
+      ${canVote ? `<div class="row"><input type="text" placeholder="Why none of these? (optional)" aria-label="Reason" data-reason="${esc(n.id)}">
+        <button class="act" data-reject="${esc(n.id)}" data-round="${n.round}">Reject all</button><span class="err"></span></div>` : ''}
+      ${n.dropped.length ? `<details><summary>${n.dropped.length} plan(s) dropped by the checks</summary>
+        ${n.dropped.map(d => `<div class="meta" style="margin-top:6px"><b>${esc(d.title)}</b>: ${d.problems.map(esc).join('; ')}</div>`).join('')}</details>` : ''}
+      <details><summary>History</summary>${n.history.map(h => `<div class="meta">${esc(h)}</div>`).join('')}</details>
+      ${OPEN_NEGOTIATION.has(n.status) && n.status !== 'applying' ? `<div class="row"><button class="act" data-stop="${esc(n.id)}">Cancel negotiation</button></div>` : ''}
+    </div>`;
+  };
+  $view.innerHTML = `
+    <h2>Recovery plans</h2>
+    <p class="lead">When a slip puts a customer promise or several teams at risk, the affected leads choose a plan here or in their inbox. The chosen plan is applied for everyone; if any step fails, the steps already made are undone.</p>
+    ${ns.length ? ns.map(body).join('') : '<div class="empty">No negotiations yet. One starts when a slip affects a customer promise or more than one team.</div>'}`;
+  const vote = async (el, id, round, plan, reason) => {
+    try { await post(`/negotiations/${encodeURIComponent(id)}/vote`, { round: Number(round), plan, by: state.person, reason }); setTimeout(render, 600); }
+    catch (e) { alertInline(el, e.message); }
+  };
+  $view.querySelectorAll('[data-vote]').forEach(b => b.onclick = () => vote(b, b.dataset.n, b.dataset.round, b.dataset.vote, null));
+  $view.querySelectorAll('[data-reject]').forEach(b => b.onclick = () =>
+    vote(b, b.dataset.reject, b.dataset.round, 'reject', $view.querySelector(`[data-reason="${CSS.escape(b.dataset.reject)}"]`)?.value || null));
+  $view.querySelectorAll('[data-stop]').forEach(b => b.onclick = async () => {
+    try { await post(`/negotiations/${encodeURIComponent(b.dataset.stop)}/cancel`, { by: state.person }); setTimeout(render, 600); }
+    catch (e) { alertInline(b, e.message); }
+  });
+}
+
+// ------------------------------------------------------------ operations
+async function renderOps() {
+  let dead, log;
+  try { [dead, log] = await Promise.all([api('/ops/dead-letters?all=true'), api('/ops/audit?limit=100')]); }
+  catch (e) { $view.innerHTML = `<h2>Operations</h2><div class="empty">${esc(e.message)}</div>`; return; }
+  const open = dead.filter(d => d.status === 'open');
+  const KIND = { extraction_failed: 'Batch could not be read', out_of_sync: 'Store and workflow disagree', restarted: 'Workflow restarted by the sweep' };
+  $view.innerHTML = `
+    <h2>Operations</h2>
+    <p class="lead">Work that could not finish by itself, what the hourly sweep fixed, and who did what. Leads and admins only.</p>
+    <div class="toolbar"><button class="act" id="sweep">Run the sweep now</button><span class="meta" id="sweepMsg"></span></div>
+    <h2 style="margin-top:8px">Dead letters <span class="meta">(${open.length} waiting)</span></h2>
+    ${dead.length ? `<table><thead><tr><th>What</th><th>Reference</th><th>Detail</th><th>Status</th><th></th></tr></thead><tbody>
+      ${dead.map(d => `<tr><td>${esc(KIND[d.kind] || d.kind)}<div class="meta">${when(d.createdAt)}</div></td><td class="meta">${esc(d.reference)}</td>
+        <td>${esc(d.error || '')}${d.messages.length ? `<div class="meta">${d.messages.length} message(s)</div>` : ''}</td><td>${pill(d.status)}</td>
+        <td>${d.status === 'open' ? `${d.kind === 'extraction_failed' ? `<button class="act primary" data-retry="${esc(d.id)}">Retry</button> ` : ''}<button class="act" data-dismiss="${esc(d.id)}">Dismiss</button>` : ''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">Nothing has failed.</div>'}
+    <h2 style="margin-top:20px">Audit log</h2>
+    ${log.length ? `<table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>On</th></tr></thead><tbody>
+      ${log.map(a => `<tr><td class="meta">${when(a.at)}</td><td>${esc(name(a.actor))}</td><td>${esc(a.action)}${a.detail ? `<div class="meta">${esc(a.detail)}</div>` : ''}</td><td class="meta">${esc(a.target || '')}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">No actions yet.</div>'}`;
+  document.getElementById('sweep').onclick = async () => {
+    try { const r = await post('/ops/reconcile', {}); document.getElementById('sweepMsg').textContent = 'Started ' + r.workflowId; setTimeout(render, 1500); }
+    catch (e) { document.getElementById('sweepMsg').textContent = e.message; }
+  };
+  $view.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => { try { await post(`/ops/dead-letters/${encodeURIComponent(b.dataset.retry)}/retry`, {}); render(); } catch (e) { alertInline(b, e.message); } });
+  $view.querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => { try { await post(`/ops/dead-letters/${encodeURIComponent(b.dataset.dismiss)}/dismiss`, {}); render(); } catch (e) { alertInline(b, e.message); } });
+}
+
 // ------------------------------------------------------------ shell
-const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs };
+const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, plans: renderPlans, ops: renderOps };
 async function render() {
   try { await views[state.tab](); }
   catch (e) { $view.innerHTML = `<div class="empty">Could not load: ${esc(e.message)}. Is the app running?</div>`; }
@@ -267,7 +368,7 @@ document.getElementById('tabs').onclick = e => {
 async function init() {
   try { state.people = await api('/people'); } catch { state.people = []; }
   const sel = document.getElementById('person');
-  sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.lead ? ' (lead)' : ''}</option>`).join('');
   state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
   if (state.person) sel.value = state.person;
   sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); };

@@ -19,7 +19,10 @@ public final class Workers {
             LinkActivities links,
             HandoffActivities handoffs,
             ModelActivities model,
-            PlanningActivities planning) {}
+            PlanningActivities planning,
+            NegotiationActivities negotiations,
+            RecoveryActivities recovery,
+            OpsActivities ops) {}
 
     /**
      * @param newWorker creates a worker for a task queue, e.g. {@code factory::newWorker}
@@ -29,13 +32,15 @@ public final class Workers {
     public static Worker register(BiFunction<String, WorkerOptions, Worker> newWorker, Activities activities, int modelConcurrency) {
         Worker main = newWorker.apply(TASK_QUEUE_MAIN, WorkerOptions.getDefaultInstance());
         main.registerWorkflowImplementationTypes(ExtractionWorkflowImpl.class, PromiseWorkflowImpl.class,
-                DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class, RippleWorkflowImpl.class, HandoffWorkflowImpl.class);
-        main.registerActivitiesImplementations(activities.promises(), activities.links(), activities.handoffs());
+                DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class, RippleWorkflowImpl.class, HandoffWorkflowImpl.class,
+                NegotiationWorkflowImpl.class, TeamWorkflowImpl.class, ReconcileWorkflowImpl.class);
+        main.registerActivitiesImplementations(activities.promises(), activities.links(), activities.handoffs(), activities.negotiations(),
+                activities.ops());
 
-        // Model calls (extraction, the handoff agent) get their own queue and a concurrency cap.
+        // Model calls (extraction, the handoff agent, the option agent) get their own queue and a concurrency cap.
         Worker llm = newWorker.apply(TASK_QUEUE_LLM,
                 WorkerOptions.newBuilder().setMaxConcurrentActivityExecutionSize(modelConcurrency).build());
-        llm.registerActivitiesImplementations(activities.model(), activities.planning());
+        llm.registerActivitiesImplementations(activities.model(), activities.planning(), activities.recovery());
         return main;
     }
 }

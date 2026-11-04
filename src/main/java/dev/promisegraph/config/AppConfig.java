@@ -16,6 +16,11 @@ import dev.promisegraph.inbox.Signals;
 import dev.promisegraph.inbox.TemporalSignals;
 import dev.promisegraph.ingestion.IngestionGateway;
 import dev.promisegraph.notify.Notifier;
+import dev.promisegraph.privacy.Visibility;
+import dev.promisegraph.recovery.OptionAgent;
+import dev.promisegraph.recovery.RecoveryPlanning;
+import dev.promisegraph.recovery.RecoverySettings;
+import dev.promisegraph.recovery.RulePlanner;
 import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.HandoffStore;
 import dev.promisegraph.store.InMemoryRepository;
@@ -24,6 +29,9 @@ import dev.promisegraph.store.InboxStore;
 import dev.promisegraph.store.JdbcRepository;
 import dev.promisegraph.store.JdbcStores;
 import dev.promisegraph.store.LinkStore;
+import dev.promisegraph.store.NegotiationStore;
+import dev.promisegraph.store.AuditLog;
+import dev.promisegraph.store.DeadLetterStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.ExtractionWorkflow;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
@@ -84,6 +92,24 @@ public class AppConfig {
         return d == null ? new InMemoryStores.Handoffs() : new JdbcStores.Handoffs(new NamedParameterJdbcTemplate(d));
     }
 
+    @Bean
+    NegotiationStore negotiationStore(ObjectProvider<HikariDataSource> ds) {
+        HikariDataSource d = ds.getIfAvailable();
+        return d == null ? new InMemoryStores.Negotiations() : new JdbcStores.Negotiations(new NamedParameterJdbcTemplate(d));
+    }
+
+    @Bean
+    DeadLetterStore deadLetterStore(ObjectProvider<HikariDataSource> ds) {
+        HikariDataSource d = ds.getIfAvailable();
+        return d == null ? new InMemoryStores.DeadLetters() : new JdbcStores.DeadLetters(new NamedParameterJdbcTemplate(d));
+    }
+
+    @Bean
+    AuditLog auditLog(ObjectProvider<HikariDataSource> ds) {
+        HikariDataSource d = ds.getIfAvailable();
+        return d == null ? new InMemoryStores.Audit() : new JdbcStores.Audit(new NamedParameterJdbcTemplate(d));
+    }
+
     // ------------------------------------------------------------ extraction, notifications, people
 
     @Bean
@@ -118,6 +144,28 @@ public class AppConfig {
         if ("agent".equals(handoff.planner())) {
             return new HandoffAgent(new AnthropicModelClient(env.getProperty("ANTHROPIC_API_KEY")), props.model(),
                     handoff.agentMaxSteps(), rules);
+        }
+        return rules;
+    }
+
+    @Bean
+    Visibility visibility(Directory directory, PrivacyProperties privacy) {
+        return new Visibility(directory, privacy.admins());
+    }
+
+    // ------------------------------------------------------------ negotiations
+
+    @Bean
+    RecoverySettings recoverySettings(NegotiationProperties negotiation) {
+        return new RecoverySettings(negotiation.capacity(), negotiation.minTeams(), negotiation.customers());
+    }
+
+    @Bean
+    RecoveryPlanning.Planner recoveryPlanner(NegotiationProperties negotiation, PromiseGraphProperties props, Environment env) {
+        RecoveryPlanning.Planner rules = new RulePlanner();
+        if ("agent".equals(negotiation.planner())) {
+            return new OptionAgent(new AnthropicModelClient(env.getProperty("ANTHROPIC_API_KEY")), props.model(),
+                    negotiation.agentMaxSteps(), rules);
         }
         return rules;
     }

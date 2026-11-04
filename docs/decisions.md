@@ -101,3 +101,97 @@ is marked done only after the signal is delivered.
 
 Jackson builds records through their canonical constructor. Extra constructors on those records
 were replaced with named factories (`Notification.about`), so deserialization never has to choose.
+
+## 17. A negotiation starts only when a slip crosses team or customer lines
+
+Every slip still warns the owners downstream (Phase 2). A `NegotiationWorkflow` starts only when
+the ripple reaches a promise made to a customer, or promises in at least two teams
+(`PG_NEGOTIATION_MIN_TEAMS`). A slip inside one team is left to its owners; asking leads to
+approve plans for every small slip would train them to ignore the requests. A slip with no new
+date has nothing to plan around, so it only warns.
+
+A negotiation is started by an activity as a workflow of its own, not as a child of the ripple:
+it runs for days after the ripple has finished, and nothing about it belongs to the ripple.
+
+## 18. One verifier for every plan, whoever proposed it
+
+Rule plans and agent plans pass through the same `PlanVerifier`: real open promises only, no date
+in the past, nobody's date pulled earlier than they promised, the late promise brought forward
+only if someone is added to help, nobody over the workload limit or asked while away, and nothing
+due before the work it waits on unless it delivers a first part. What a promise is and when it is
+due always come from storage; the agent only names promise IDs. The agent can call `check_plan`
+before `submit_plan`, so it learns the rules from the verifier's answers.
+
+## 19. Approval is unanimous, and disagreement is a new round
+
+Every affected team's lead approves. One plan chosen by all of them is applied. If they all reject,
+the next round never offers those plans or those helpers again, and their reasons go to the
+planner. If they split, the next round offers only the plans someone chose. After three rounds,
+or at the deadline, the negotiation stops and changes nothing. Owners can still move their own
+dates, as before.
+
+## 20. An approved plan is applied as a saga
+
+Each move is one activity that sends one signal, keyed by negotiation, round, plan and step, so a
+retry never applies a move twice. The plan is checked again against the current state first. If
+a step fails because a promise has closed, the earlier steps are undone in reverse order with
+their own keyed signals, and everyone is told. Changes a plan makes don't ripple again: the plan
+already covered every promise downstream, and a ripple would start a second negotiation about
+the same slip.
+
+## 21. Teams answer capacity questions through workflow updates
+
+Each team has a long-running `TeamWorkflow` that holds its workload, refreshed daily, and the
+people that open negotiations have asked for. Before plans reach approvers, the negotiation asks
+each team, through a Temporal update, to hold the people a plan adds. Two negotiations running at
+once therefore can't both count on the same free person, and every answer is in the team's
+history. Holds for plans not chosen are released; the chosen plan's holds last until the late
+promise's new date.
+
+## 22. A dependent is never likely before the work it waits on
+
+Ripple keeps each dependent's gap after its upstream promise. After an earlier slip that gap can
+be negative (the upstream was already later than the dependent), which gave dates before the
+upstream finished. The gap now has a floor of zero.
+
+## 23. Failures end up in front of a person, not in a log
+
+A batch the model can't read after its retries becomes a dead letter holding its messages, which
+an operator can retry under the same workflow ID (so the messages are still its own to claim).
+An hourly `ReconcileWorkflow` checks that every open promise has a running workflow; one that
+failed, was terminated or never started is restarted from the stored promise, and one that
+finished while the store still shows it open is reported rather than guessed at.
+
+## 24. Idempotency is tested, not just designed
+
+`IdempotencyTest` runs every activity with a side effect twice and compares everything a person
+could see. The audit found one real bug: a retried hand-back reported an already-returned promise
+as closed. docs/idempotency.md lists every activity and why a repeat is safe.
+
+## 25. Sensitive details are removed before they enter a workflow
+
+Workflow inputs and activity results live in Temporal's history, so redaction happens at the two
+entry points (the webhook gateway and the Gmail fetch), not later. Email addresses keep their
+domain because it can show a message is about a customer.
+
+## 26. Visibility is decided on the server, by relationship
+
+A person sees promises they own or were made to them, ones linked to theirs, their team's if they
+lead it, ones in a negotiation they approve, and ones they handed over while away. Teammates don't
+see each other's promises by default, which is what lets someone covering see only what was
+handed to them. Quotes from messages are shown only to the owner and the person promised. Until
+sign-in exists the viewer comes from a header, so the server stays on localhost.
+
+## 27. Metrics go through Micrometer, including Temporal's
+
+The app's counters and gauges and the Temporal SDK's metrics share one Prometheus endpoint on a
+separate management port. The dashboard and alert rules live in `ops/` and start with
+`docker compose --profile observability up -d`. Tracing is not set up yet.
+
+## 28. Ripples start from an activity too
+
+Ripples are now started the same way as negotiations (from an activity, as workflows of their own). A missed
+promise closes right after starting its ripple, so the ripple always outlived its parent; under
+load the time-skipping test server stalled on those orphaned children. Promise workflows started
+before Phase 4 keep the child path through `getVersion("ripple-on-slip", …)` version 1.
+

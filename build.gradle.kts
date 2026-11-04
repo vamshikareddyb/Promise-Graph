@@ -1,3 +1,5 @@
+import java.time.Duration
+
 plugins {
     java
     id("org.springframework.boot") version "3.5.16"
@@ -22,6 +24,8 @@ val temporalVersion = "1.40.0"
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     implementation("io.temporal:temporal-sdk:$temporalVersion")
     runtimeOnly("org.postgresql:postgresql")
 
@@ -44,8 +48,12 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    // A test that hangs fails after this long, with the stack of where it was stuck.
+    systemProperty("junit.jupiter.execution.timeout.default", "3m")
+    systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "SEPARATE_THREAD")
+    timeout.set(Duration.ofMinutes(25))
     testLogging {
-        events("failed", "skipped")
+        events("started", "failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
     // Print totals so CI shows what actually ran, e.g. whether the Docker-based tests were skipped.
@@ -94,6 +102,24 @@ tasks.register<JavaExec>("evalGate2") {
     mainClass = "dev.promisegraph.eval.CoordinationEval"
 }
 
+// Gate 3: simulated leads approve at least half the recovery plans; every plan names real promises.
+tasks.register<JavaExec>("evalGate3") {
+    group = "verification"
+    description = "Evaluates recovery plans against simulated leads' stated preferences (Gate 3)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "dev.promisegraph.eval.RecoveryEval"
+}
+
+// Load and failure test against a running Temporal server: ./gradlew loadTest -Pcount=50000 -PkillAt=0.5
+tasks.register<JavaExec>("loadTest") {
+    group = "verification"
+    description = "Runs many promise workflows against a real Temporal server, optionally killing the worker midway."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.promisegraph.load.LoadRunner"
+    args("--count", (project.findProperty("count") ?: "1000").toString(),
+        "--kill-at", (project.findProperty("killAt") ?: "0").toString())
+}
+
 tasks.named("check") {
-    dependsOn("evalGate", "evalGate2")
+    dependsOn("evalGate", "evalGate2", "evalGate3")
 }
