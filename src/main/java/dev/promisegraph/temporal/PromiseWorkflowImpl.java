@@ -237,7 +237,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
                 } else if (!edits.isEmpty()) {
                     record("edited", s.actor(), edits);
                 }
-                if (later(oldDue, promise.due())) {
+                if (later(oldDue, promise.due()) && !fromPlan(s)) {
                     ripple(oldDue, promise.due(), "slipped");
                 }
             }
@@ -253,7 +253,7 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
                     String old = promise.due();
                     promise = promise.withDue(s.due());
                     record("date_changed", s.actor(), details("old_due", old, "new_due", s.due()));
-                    if (later(old, s.due())) {
+                    if (later(old, s.due()) && !fromPlan(s)) {
                         ripple(old, s.due(), "slipped");
                     }
                 } else {
@@ -348,6 +348,14 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
         m.put(k1, v1 == null ? "" : v1);
         m.put(k2, v2 == null ? "" : v2);
         return m;
+    }
+
+    /**
+     * Changes made by an agreed recovery plan don't ripple again: the plan already covered every
+     * promise downstream, and a ripple would start a second negotiation about the same slip.
+     */
+    private static boolean fromPlan(PromiseSignal s) {
+        return s.sourceId() != null && s.sourceId().startsWith("plan:");
     }
 
     private static boolean later(String oldDue, String newDue) {

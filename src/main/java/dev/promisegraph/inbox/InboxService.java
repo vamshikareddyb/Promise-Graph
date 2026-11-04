@@ -5,13 +5,14 @@ import dev.promisegraph.store.InboxStore;
 import dev.promisegraph.store.LinkStore;
 import dev.promisegraph.temporal.Contracts.HandoffResponse;
 import dev.promisegraph.temporal.Contracts.PromiseSignal;
+import dev.promisegraph.temporal.NegotiationContracts.Vote;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 
 /**
- * Turns a button press in the inbox into a signal to the right workflow (or a link decision), then
- * marks the item done. Signals carry the item and action as their source, so a double click or a
- * retried request acts once.
+ * Turns a button press in the inbox into a signal to the right workflow (a promise, a handoff or a
+ * negotiation) or a link decision, then marks the item done. Signals carry the item and action as
+ * their source, so a double click or a retried request acts once.
  */
 public final class InboxService {
 
@@ -55,6 +56,8 @@ public final class InboxService {
         try {
             if (item.subject() != null && item.subject().startsWith("link:")) {
                 decideLink(tenant, item.subject().substring(5), req.action(), by);
+            } else if (item.subject() != null && item.subject().startsWith("negotiation:")) {
+                signals.toNegotiation(negotiationId(item.subject()), vote(item.subject(), req, by, source));
             } else if (item.subject() != null && item.subject().startsWith("handoff:")) {
                 String[] parts = item.subject().split(":", 3);
                 signals.toHandoff(parts[1], new HandoffResponse(req.action(), parts[2], by, null, source));
@@ -67,6 +70,24 @@ public final class InboxService {
         }
         inbox.resolve(tenant, key, req.action());
         return inbox.getItem(tenant, key).orElse(item);
+    }
+
+    /** Subjects look like {@code negotiation:<id>:<round>}; the id itself may contain colons. */
+    static String negotiationId(String subject) {
+        String rest = subject.substring("negotiation:".length());
+        return rest.substring(0, rest.lastIndexOf(':'));
+    }
+
+    static Vote vote(String subject, ActionRequest req, String by, String source) {
+        int round = Integer.parseInt(subject.substring(subject.lastIndexOf(':') + 1));
+        String reason = req.what() == null || req.what().isBlank() ? null : req.what().strip();
+        if (req.action().startsWith("approve ")) {
+            return new Vote("approve", round, req.action().substring("approve ".length()).strip(), by, reason, source);
+        }
+        if (req.action().equals("reject all")) {
+            return new Vote("reject", round, null, by, reason, source);
+        }
+        throw new ActionException(400, "unknown plan action " + req.action());
     }
 
     private void decideLink(String tenant, String fromTo, String action, String by) {

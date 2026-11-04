@@ -11,6 +11,9 @@ import dev.promisegraph.handoff.Absence;
 import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.inbox.InboxItem;
 import dev.promisegraph.links.Link;
+import dev.promisegraph.recovery.Move;
+import dev.promisegraph.recovery.NegotiationRecord;
+import dev.promisegraph.recovery.RecoveryPlan;
 import java.sql.Connection;
 import java.util.EnumSet;
 import java.util.List;
@@ -28,7 +31,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * The Postgres stores against a real database, with both migrations applied in order.
+ * The Postgres stores against a real database, with every migration applied in order.
  * Skipped when Docker is not available; CI always runs it.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -52,6 +55,8 @@ class JdbcStoresTest {
             ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/001_init.sql"));
             ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/002_phase2.sql"));
             ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/002_phase2.sql")); // safe to re-run
+            ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/003_phase3.sql"));
+            ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/003_phase3.sql"));
         }
         jdbc = new NamedParameterJdbcTemplate(ds);
     }
@@ -157,5 +162,30 @@ class JdbcStoresTest {
             });
         });
         assertThat(store.handoffs("demo")).hasSize(1);
+    }
+
+    @Test
+    void negotiationSnapshotsRoundTrip() {
+        JdbcStores.Negotiations store = new JdbcStores.Negotiations(jdbc);
+        Promise job = promise("job", "dev", PromiseStatus.AT_RISK, 2);
+        RecoveryPlan plan = RecoveryPlan.draft("Accept the new dates", "move 1 date", List.of(Move.moveDate(job, "2026-12-02", "same gap")), "rules")
+                .withId("A").verified(new RecoveryPlan.Score(1, 0, 0, 0, 14), List.of());
+        NegotiationRecord n = new NegotiationRecord("demo", "api-v3", "api", "ship the data export API", "neha", "2026-11-13",
+                "2026-11-27", "awaiting_approval", 1, "context", "rules", List.of(plan), List.of(), List.of("meera", "ravi"),
+                Map.of("ravi", "A"), null, "2026-11-08T05:00:00Z", List.of("started"), T0, T0);
+        store.save(n);
+        store.save(n); // replacing the snapshot is safe to repeat
+
+        NegotiationRecord back = store.get("demo", "api-v3").orElseThrow();
+        assertThat(back).isEqualTo(n);
+        assertThat(back.plans().get(0).passes()).isTrue();
+        assertThat(store.openFor("demo", "api")).hasSize(1);
+
+        NegotiationRecord applied = new NegotiationRecord("demo", "api-v3", "api", "ship the data export API", "neha", "2026-11-13",
+                "2026-11-27", "applied", 1, "context", "rules", List.of(plan), List.of(), List.of("meera", "ravi"),
+                Map.of("ravi", "A", "meera", "A"), "A", "2026-11-08T05:00:00Z", List.of("started", "applied"), T0, "2026-11-03T05:00:00Z");
+        store.save(applied);
+        assertThat(store.openFor("demo", "api")).isEmpty();
+        assertThat(store.list("demo")).singleElement().extracting(NegotiationRecord::chosen).isEqualTo("A");
     }
 }

@@ -101,3 +101,52 @@ is marked done only after the signal is delivered.
 
 Jackson builds records through their canonical constructor. Extra constructors on those records
 were replaced with named factories (`Notification.about`), so deserialization never has to choose.
+
+## 17. A negotiation starts only when a slip crosses team or customer lines
+
+Every slip still warns the owners downstream (Phase 2). A `NegotiationWorkflow` starts only when
+the ripple reaches a promise made to a customer, or promises in at least two teams
+(`PG_NEGOTIATION_MIN_TEAMS`). A slip inside one team is left to its owners; asking leads to
+approve plans for every small slip would train them to ignore the requests. A slip with no new
+date has nothing to plan around, so it only warns.
+
+## 18. One verifier for every plan, whoever proposed it
+
+Rule plans and agent plans pass through the same `PlanVerifier`: real open promises only, no date
+in the past, nobody's date pulled earlier than they promised, the late promise brought forward
+only if someone is added to help, nobody over the workload limit or asked while away, and nothing
+due before the work it waits on unless it delivers a first part. What a promise is and when it is
+due always come from storage; the agent only names promise IDs. The agent can call `check_plan`
+before `submit_plan`, so it learns the rules from the verifier's answers.
+
+## 19. Approval is unanimous, and disagreement is a new round
+
+Every affected team's lead approves. One plan chosen by all of them is applied. If they all reject,
+the next round never offers those plans or those helpers again, and their reasons go to the
+planner. If they split, the next round offers only the plans someone chose. After three rounds,
+or at the deadline, the negotiation stops and changes nothing. Owners can still move their own
+dates, as before.
+
+## 20. An approved plan is applied as a saga
+
+Each move is one activity that sends one signal, keyed by negotiation, round, plan and step, so a
+retry never applies a move twice. The plan is checked again against the current state first. If
+a step fails because a promise has closed, the earlier steps are undone in reverse order with
+their own keyed signals, and everyone is told. Changes a plan makes don't ripple again: the plan
+already covered every promise downstream, and a ripple would start a second negotiation about
+the same slip.
+
+## 21. Teams answer capacity questions through workflow updates
+
+Each team has a long-running `TeamWorkflow` that holds its workload, refreshed daily, and the
+people that open negotiations have asked for. Before plans reach approvers, the negotiation asks
+each team, through a Temporal update, to hold the people a plan adds. Two negotiations running at
+once therefore can't both count on the same free person, and every answer is in the team's
+history. Holds for plans not chosen are released; the chosen plan's holds last until the late
+promise's new date.
+
+## 22. A dependent is never likely before the work it waits on
+
+Ripple keeps each dependent's gap after its upstream promise. After an earlier slip that gap can
+be negative (the upstream was already later than the dependent), which gave dates before the
+upstream finished. The gap now has a floor of zero.

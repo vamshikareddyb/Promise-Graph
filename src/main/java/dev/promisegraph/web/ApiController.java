@@ -12,11 +12,14 @@ import dev.promisegraph.inbox.InboxItem;
 import dev.promisegraph.inbox.InboxService;
 import dev.promisegraph.inbox.Signals;
 import dev.promisegraph.links.Link;
+import dev.promisegraph.recovery.NegotiationRecord;
 import dev.promisegraph.store.HandoffStore;
 import dev.promisegraph.store.InboxStore;
 import dev.promisegraph.store.LinkStore;
+import dev.promisegraph.store.NegotiationStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.Contracts.HandoffResponse;
+import dev.promisegraph.temporal.NegotiationContracts.Vote;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -62,6 +65,9 @@ public class ApiController {
 
     public record Assignment(String promiseId, String owner, String by) {}
 
+    /** @param plan "A", "B", "C" or "reject" */
+    public record PlanVote(int round, String plan, String by, String reason) {}
+
     private static final EnumSet<PromiseStatus> OPEN = EnumSet.of(PromiseStatus.DETECTED, PromiseStatus.ACTIVE, PromiseStatus.AT_RISK);
 
     private final String tenant;
@@ -73,9 +79,10 @@ public class ApiController {
     private final InboxService inboxService;
     private final HandoffScheduler scheduler;
     private final Signals signals;
+    private final NegotiationStore negotiations;
 
     public ApiController(PromiseGraphProperties props, Repository repo, LinkStore links, InboxStore inbox, HandoffStore handoffs,
-            Directory directory, InboxService inboxService, HandoffScheduler scheduler, Signals signals) {
+            Directory directory, InboxService inboxService, HandoffScheduler scheduler, Signals signals, NegotiationStore negotiations) {
         this.tenant = props.tenant();
         this.repo = repo;
         this.links = links;
@@ -85,6 +92,7 @@ public class ApiController {
         this.inboxService = inboxService;
         this.scheduler = scheduler;
         this.signals = signals;
+        this.negotiations = negotiations;
     }
 
     // ------------------------------------------------------------ people
@@ -216,6 +224,46 @@ public class ApiController {
     @PostMapping("/handoffs/{id}/cancel")
     public Map<String, String> cancel(@PathVariable String id) {
         signals.toHandoff(id, new HandoffResponse("cancel", null, "web", null, "web:cancel"));
+        return Map.of("status", "cancelling");
+    }
+
+    // ------------------------------------------------------------ negotiations
+
+    @GetMapping("/negotiations")
+    public List<NegotiationRecord> negotiations() {
+        return negotiations.list(tenant);
+    }
+
+    @GetMapping("/negotiations/{id}")
+    public NegotiationRecord negotiation(@PathVariable String id) {
+        return negotiations.get(tenant, id).orElseThrow(() -> new InboxService.ActionException(404, "no such negotiation"));
+    }
+
+    /** An approver's choice from the Plans page. The workflow ignores votes from non-approvers and for old rounds. */
+    @PostMapping("/negotiations/{id}/vote")
+    public Map<String, String> vote(@PathVariable String id, @RequestBody PlanVote req) {
+        if (req.by() == null || req.by().isBlank() || req.plan() == null || req.plan().isBlank()) {
+            throw new IllegalArgumentException("by and plan are required");
+        }
+        NegotiationRecord n = negotiation(id);
+        if (!n.approvers().contains(req.by().strip())) {
+            throw new InboxService.ActionException(403, req.by().strip() + " is not an approver of this negotiation");
+        }
+        String plan = req.plan().strip();
+        boolean reject = plan.equalsIgnoreCase("reject");
+        if (!reject && n.plan(plan).isEmpty()) {
+            throw new IllegalArgumentException("this round offers plans " + n.plans().stream().map(p -> p.id()).toList());
+        }
+        String by = req.by().strip();
+        signals.toNegotiation(id, new Vote(reject ? "reject" : "approve", req.round(), reject ? null : plan, by, req.reason(),
+                "web:" + req.round() + ":" + by + ":" + plan));
+        return Map.of("status", reject ? "rejected" : "chose plan " + plan);
+    }
+
+    @PostMapping("/negotiations/{id}/cancel")
+    public Map<String, String> cancelNegotiation(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        String by = body == null || body.get("by") == null ? "web" : body.get("by");
+        signals.toNegotiation(id, Vote.stop("cancel", by, body == null ? null : body.get("reason"), "web:cancel"));
         return Map.of("status", "cancelling");
     }
 

@@ -94,6 +94,14 @@ tasks.register<JavaExec>("evalGate2") {
     mainClass = "dev.promisegraph.eval.CoordinationEval"
 }
 
+// Gate 3: simulated leads approve at least half the recovery plans; every plan names real promises.
+tasks.register<JavaExec>("evalGate3") {
+    group = "verification"
+    description = "Evaluates recovery plans against simulated leads' stated preferences (Gate 3)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass = "dev.promisegraph.eval.RecoveryEval"
+}
+
 tasks.named("check") {
-    dependsOn("evalGate", "evalGate2")
+    dependsOn("evalGate", "evalGate2", "evalGate3")
 }

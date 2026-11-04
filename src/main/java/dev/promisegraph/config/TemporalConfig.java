@@ -7,16 +7,22 @@ import dev.promisegraph.handoff.Directory;
 import dev.promisegraph.handoff.HandoffPlanning;
 import dev.promisegraph.handoff.HandoffScheduler;
 import dev.promisegraph.notify.Notifier;
+import dev.promisegraph.recovery.RecoveryPlanning;
+import dev.promisegraph.recovery.RecoverySettings;
 import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.HandoffStore;
 import dev.promisegraph.store.LinkStore;
+import dev.promisegraph.store.NegotiationStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.DigestWorkflow;
 import dev.promisegraph.temporal.HandoffActivitiesImpl;
 import dev.promisegraph.temporal.LinkActivitiesImpl;
 import dev.promisegraph.temporal.ModelActivitiesImpl;
+import dev.promisegraph.temporal.NegotiationActivitiesImpl;
 import dev.promisegraph.temporal.PlanningActivitiesImpl;
 import dev.promisegraph.temporal.PromiseActivitiesImpl;
+import dev.promisegraph.temporal.RecoveryActivitiesImpl;
+import dev.promisegraph.temporal.SituationLoader;
 import dev.promisegraph.temporal.Workers;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;
@@ -32,6 +38,7 @@ import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
+import java.time.Clock;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,15 +81,25 @@ public class TemporalConfig {
     }
 
     @Bean
+    SituationLoader situationLoader(Repository repo, LinkStore links, HandoffStore handoffs, Directory directory, RecoverySettings settings) {
+        return new SituationLoader(repo, links, handoffs, directory, settings);
+    }
+
+    @Bean
     Workers.Activities activities(PromiseActivitiesImpl promises, ModelActivitiesImpl model, Repository repo, LinkStore links,
             HandoffStore handoffs, HandoffScheduler scheduler, HandoffPlanning.Planner planner, Directory directory,
-            WorkflowClient client) {
+            WorkflowClient client, SituationLoader situations, NegotiationStore negotiationStore,
+            RecoveryPlanning.Planner recoveryPlanner, NegotiationProperties negotiation) {
+        NegotiationActivitiesImpl.Policy policy = new NegotiationActivitiesImpl.Policy(negotiation.enabled(), negotiation.approvalHours(),
+                negotiation.reminderHours(), negotiation.maxRounds(), negotiation.teamChecks());
         return new Workers.Activities(
                 promises,
                 new LinkActivitiesImpl(repo, links, promises, client),
                 new HandoffActivitiesImpl(repo, handoffs, scheduler, promises, client),
                 model,
-                new PlanningActivitiesImpl(planner, repo, links, handoffs, directory));
+                new PlanningActivitiesImpl(planner, repo, links, handoffs, directory),
+                new NegotiationActivitiesImpl(situations, repo, negotiationStore, promises, client, policy, Clock.systemUTC()),
+                new RecoveryActivitiesImpl(recoveryPlanner, situations));
     }
 
     @Bean(destroyMethod = "shutdown")

@@ -18,8 +18,9 @@ import java.util.Set;
  *
  * <p>Each dependent keeps the same gap it had to its upstream promise: if the API was due 13 Nov and
  * the dashboard 18 Nov, the dashboard is assumed to need those 5 days after the API, so an API moved
- * to 27 Nov makes the dashboard likely on 2 Dec. Without knowing how long the work really takes,
- * this is the cautious choice: any later upstream date flags the dependent, and an owner who has
+ * to 27 Nov makes the dashboard likely on 2 Dec. A dependent is never likely before its upstream
+ * promise, even when an earlier slip already pushed the upstream past it. Without knowing how long
+ * the work really takes, this is the cautious choice: any later upstream date flags the dependent, and an owner who has
  * slack simply keeps their date. A dependent whose upstream moved earlier is not flagged, and the
  * ripple stops at closed promises.
  */
@@ -90,8 +91,10 @@ public final class Ripple {
                     vLikely = null;
                     affected = true; // no dates to compare: tell the owner it may move
                 } else {
+                    // Keep the gap the dependent had after its upstream promise, but never land
+                    // before the upstream itself: after an earlier slip that gap can be negative.
                     vLikely = uOriginal != null
-                            ? vDue.plusDays(ChronoUnit.DAYS.between(uOriginal, uLikely))
+                            ? uLikely.plusDays(Math.max(0, ChronoUnit.DAYS.between(uOriginal, vDue)))
                             : uLikely.plusDays(1);
                     affected = vLikely.isAfter(vDue);
                 }

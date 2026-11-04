@@ -7,6 +7,7 @@ import dev.promisegraph.handoff.Absence;
 import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.inbox.InboxItem;
 import dev.promisegraph.links.Link;
+import dev.promisegraph.recovery.NegotiationRecord;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -19,7 +20,7 @@ import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-/** Postgres link, inbox and handoff stores. Schema: migrations/002_phase2.sql. Every write is safe to repeat. */
+/** Postgres link, inbox, handoff and negotiation stores. Schema: migrations/002_phase2.sql and 003_phase3.sql. Every write is safe to repeat. */
 public final class JdbcStores {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -226,6 +227,47 @@ public final class JdbcStores {
         public List<HandoffRecord> handoffs(String tenant) {
             return jdbc.query("SELECT " + COLS + " FROM handoffs WHERE tenant = :t ORDER BY starts_on DESC",
                     new MapSqlParameterSource("t", tenant), Handoffs::row);
+        }
+    }
+
+    public static final class Negotiations implements NegotiationStore {
+        private final NamedParameterJdbcTemplate jdbc;
+
+        public Negotiations(NamedParameterJdbcTemplate jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public void save(NegotiationRecord n) {
+            jdbc.update("INSERT INTO negotiations (tenant, id, source_promise_id, status, created_at, updated_at, doc) "
+                            + "VALUES (:t, :id, :src, :st, :c, :u, CAST(:doc AS jsonb)) "
+                            + "ON CONFLICT (tenant, id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at, doc = EXCLUDED.doc",
+                    new MapSqlParameterSource("t", n.tenant()).addValue("id", n.id()).addValue("src", n.sourcePromiseId())
+                            .addValue("st", n.status()).addValue("c", ts(n.createdAt())).addValue("u", ts(n.updatedAt()))
+                            .addValue("doc", json(n)));
+        }
+
+        private static NegotiationRecord row(ResultSet rs, int i) throws SQLException {
+            return read(rs.getString("doc"), new TypeReference<NegotiationRecord>() {});
+        }
+
+        @Override
+        public Optional<NegotiationRecord> get(String tenant, String id) {
+            return jdbc.query("SELECT doc::text AS doc FROM negotiations WHERE tenant = :t AND id = :id",
+                    new MapSqlParameterSource("t", tenant).addValue("id", id), Negotiations::row).stream().findFirst();
+        }
+
+        @Override
+        public List<NegotiationRecord> list(String tenant) {
+            return jdbc.query("SELECT doc::text AS doc FROM negotiations WHERE tenant = :t ORDER BY created_at DESC LIMIT 200",
+                    new MapSqlParameterSource("t", tenant), Negotiations::row);
+        }
+
+        @Override
+        public List<NegotiationRecord> openFor(String tenant, String sourcePromiseId) {
+            return jdbc.query("SELECT doc::text AS doc FROM negotiations WHERE tenant = :t AND source_promise_id = :src "
+                            + "AND status IN ('planning', 'awaiting_approval', 'applying') ORDER BY created_at",
+                    new MapSqlParameterSource("t", tenant).addValue("src", sourcePromiseId), Negotiations::row);
         }
     }
 }
