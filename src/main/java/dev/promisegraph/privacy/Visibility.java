@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Who may see which promise. A person sees a promise if they own it or it was made to them; if
@@ -25,11 +26,26 @@ public final class Visibility {
 
     private final Directory directory;
     private final Set<String> admins;
+    private final Supplier<Optional<String>> mailboxOwner;
 
     /** @param admins people who may use the operations pages besides team leads (e.g. the owner of a personal setup) */
     public Visibility(Directory directory, Collection<String> admins) {
+        this(directory, admins, Optional::empty);
+    }
+
+    /**
+     * @param mailboxOwner in a personal Gmail setup, the connected account: it sees everything in
+     *     the app, since everything came from its own mailbox
+     */
+    public Visibility(Directory directory, Collection<String> admins, Supplier<Optional<String>> mailboxOwner) {
         this.directory = directory;
         this.admins = Set.copyOf(admins);
+        this.mailboxOwner = mailboxOwner;
+    }
+
+    /** The connected Gmail account, in a personal setup. */
+    public boolean ownsMailbox(String viewer) {
+        return viewer != null && mailboxOwner.get().map(o -> o.equalsIgnoreCase(viewer)).orElse(false);
     }
 
     public boolean isLeadOf(String viewer, String person) {
@@ -38,13 +54,17 @@ public final class Visibility {
 
     /** Leads and admins may see operations pages and the audit log. */
     public boolean canOperate(String viewer) {
-        return admins.contains(viewer) || directory.person(viewer).map(Person::lead).orElse(false);
+        return ownsMailbox(viewer) || admins.contains(viewer) || directory.person(viewer).map(Person::lead).orElse(false);
     }
 
     /** The promise IDs one viewer may see, computed once per request. */
     public Set<String> visibleIds(String viewer, Collection<Promise> promises, List<Link> links, List<NegotiationRecord> negotiations,
             List<HandoffRecord> handoffs) {
         Set<String> out = new HashSet<>();
+        if (ownsMailbox(viewer)) {
+            promises.forEach(p -> out.add(p.id()));
+            return out;
+        }
         Set<String> own = new HashSet<>();
         for (Promise p : promises) {
             if (viewer.equals(p.owner()) || viewer.equals(p.recipient()) || isLeadOf(viewer, p.owner())) {
@@ -82,12 +102,12 @@ public final class Visibility {
     }
 
     public boolean canSeeQuotes(String viewer, Promise p) {
-        return viewer.equals(p.owner()) || viewer.equals(p.recipient());
+        return ownsMailbox(viewer) || viewer.equals(p.owner()) || viewer.equals(p.recipient());
     }
 
     /** A negotiation is visible to its approvers, the late promise's owner, and everyone whose promise a plan changes. */
     public boolean canSee(String viewer, NegotiationRecord n) {
-        if (n.approvers().contains(viewer) || viewer.equals(n.sourceOwner())) {
+        if (ownsMailbox(viewer) || n.approvers().contains(viewer) || viewer.equals(n.sourceOwner())) {
             return true;
         }
         return n.plans().stream().flatMap(p -> p.moves().stream())
@@ -99,7 +119,7 @@ public final class Visibility {
      * anyone else, only the items they were asked to cover; nothing otherwise.
      */
     public Optional<HandoffRecord> view(String viewer, HandoffRecord h) {
-        if (viewer.equals(h.person()) || isLeadOf(viewer, h.person())) {
+        if (ownsMailbox(viewer) || viewer.equals(h.person()) || isLeadOf(viewer, h.person())) {
             return Optional.of(h);
         }
         List<HandoffRecord.ItemState> mine = h.items().stream()
