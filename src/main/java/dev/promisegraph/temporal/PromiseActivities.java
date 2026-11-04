@@ -27,6 +27,9 @@ public interface PromiseActivities {
 
     void recordPromise(RecordRequest request);
 
+    /** Starts a ripple workflow with this ID unless it already exists. Returns false if it did. */
+    boolean startRipple(String workflowId, Contracts.RippleRequest request);
+
     /** At most one send per key. Returns false if this key was already sent. */
     boolean sendNotification(Notification notification);
 

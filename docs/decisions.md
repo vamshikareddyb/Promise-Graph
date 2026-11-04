@@ -187,3 +187,11 @@ sign-in exists the viewer comes from a header, so the server stays on localhost.
 The app's counters and gauges and the Temporal SDK's metrics share one Prometheus endpoint on a
 separate management port. The dashboard and alert rules live in `ops/` and start with
 `docker compose --profile observability up -d`. Tracing is not set up yet.
+
+## 28. Ripples start from an activity too
+
+Ripples are now started the same way as negotiations (from an activity, as workflows of their own). A missed
+promise closes right after starting its ripple, so the ripple always outlived its parent; under
+load the time-skipping test server stalled on those orphaned children. Promise workflows started
+before Phase 4 keep the child path through `getVersion("ripple-on-slip", …)` version 1.
+

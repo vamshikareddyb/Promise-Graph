@@ -206,6 +206,21 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
 
     /** A crash between sending and recording can repeat one message; we accept that over losing it. */
     @Override
+    public boolean startRipple(String workflowId, Contracts.RippleRequest request) {
+        WorkflowOptions options = WorkflowOptions.newBuilder()
+                .setWorkflowId(workflowId)
+                .setTaskQueue(TASK_QUEUE_MAIN)
+                .setWorkflowIdReusePolicy(WorkflowIdReusePolicy.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE)
+                .build();
+        try {
+            WorkflowClient.start(client.newWorkflowStub(RippleWorkflow.class, options)::run, request);
+            return true;
+        } catch (WorkflowExecutionAlreadyStarted e) {
+            return false; // a retry: the ripple for this change is already running or done
+        }
+    }
+
+    @Override
     public boolean sendNotification(Notification n) {
         if (repo.notificationSent(n.tenant(), n.key())) {
             return false;

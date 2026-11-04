@@ -17,7 +17,7 @@ if (Workflow.getVersion("ripple-on-slip", Workflow.DEFAULT_VERSION, 1) == Workfl
 startTheRipple();
 ```
 
-The change IDs used so far: `ripple-on-slip` (Phase 2), `negotiate-after-ripple` (Phase 3) and
+The change IDs used so far: `ripple-on-slip` (Phase 2 as a child workflow; version 2 in Phase 4 starts it from an activity), `negotiate-after-ripple` (Phase 3) and
 `dead-letter-on-extraction-failure` (Phase 4). Code that only runs inside activities, or in a new
 workflow type, needs no versioning.
 

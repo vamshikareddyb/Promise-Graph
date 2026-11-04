@@ -19,6 +19,7 @@ that nothing anyone can see has changed).
 | `saveHandoff`, `saveNegotiation` | Replaces a snapshot | A replace with the same value | both |
 | `transfer`, `handBack` | Reassigns promises, sends a summary | Reassign signals are keyed by handoff, direction and promise. **Fixed in this audit:** a repeated hand-back used to report a promise that had already moved back as "closed"; it now counts it as returned | `rippleAndHandoffActivities` |
 | `startNegotiation` | Starts a negotiation | Fixed workflow ID per slip, reject-duplicate | `NegotiationWorkflowTest` |
+| `startRipple` | Starts a ripple | Fixed workflow ID per recorded change, reject-duplicate | `Phase2WorkflowTest`, `LoadAndChaosTest` |
 | `supersede` | Signals older negotiations | Keyed by the newer negotiation's ID | `negotiationActivities` |
 | `reserve`, `release` | Holds or frees people in team workflows | Reservations are keyed by negotiation, promise and person; releasing what is already free does nothing | `negotiationActivities` |
 | `applyMove`, `undoMove` | Changes a promise, notifies people | Keyed by negotiation, round, plan and step (undo adds `:undo`) | `negotiationActivities` |
