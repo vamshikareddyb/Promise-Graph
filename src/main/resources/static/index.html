@@ -264,7 +264,7 @@ const OPEN_NEGOTIATION = new Set(['planning', 'awaiting_approval', 'applying']);
 const KIND = { move_date: 'New date', keep_date: 'Keeps date', deliver_partial: 'First part on date', add_helper: 'Adds a helper', reassign: 'New owner' };
 
 function moveChange(m) {
-  if (m.kind === 'move_date') return `${esc(m.fromDue || 'no date')} → <b>${esc(m.toDue)}</b>`;
+  if (m.kind === 'move_date') return `<span style="white-space:nowrap">${esc(m.fromDue || 'no date')} → <b>${esc(m.toDue)}</b></span>`;
   if (m.kind === 'add_helper') return `${esc(name(m.person))} helps`;
   if (m.kind === 'reassign') return `to ${esc(name(m.person))}`;
   return `keeps ${esc(m.fromDue || 'no date')}`;

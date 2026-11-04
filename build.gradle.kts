@@ -44,8 +44,12 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    // A test that hangs fails after this long, with the stack of where it was stuck.
+    systemProperty("junit.jupiter.execution.timeout.default", "3m")
+    systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "SEPARATE_THREAD")
+    timeout = java.time.Duration.ofMinutes(25)
     testLogging {
-        events("failed", "skipped")
+        events("started", "failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
     // Print totals so CI shows what actually ran, e.g. whether the Docker-based tests were skipped.
