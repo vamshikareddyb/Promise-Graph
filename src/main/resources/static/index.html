@@ -36,10 +36,10 @@
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
-  .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied { color: var(--good); }
+  .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied, .s-auto_fixed, .s-retried { color: var(--good); }
   .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled, .s-awaiting_approval, .s-applying { color: var(--warn); }
   .s-broken, .s-rejected, .s-uncovered, .s-cancelled, .s-failed, .s-unresolved { color: var(--bad); }
-  .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over, .s-expired, .s-superseded { color: var(--muted); }
+  .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over, .s-expired, .s-superseded, .s-dismissed { color: var(--muted); }
   .plan { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
   .plan.chosen { border-color: var(--good); }
   .plan h3 { font-size: 15px; margin: 0; }
@@ -63,6 +63,7 @@
     <button data-tab="graph">Graph</button>
     <button data-tab="handoffs">Handoffs</button>
     <button data-tab="plans">Plans</button>
+    <button data-tab="ops">Ops</button>
   </nav>
   <label class="who">Viewing as <select id="person"></select></label>
 </header>
@@ -78,7 +79,9 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
 
 async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  // Until sign-in exists, the server trusts this header; it still applies every visibility rule.
+  const headers = { 'Content-Type': 'application/json', ...(state.person ? { 'X-PG-Viewer': state.person } : {}) };
+  const res = await fetch('/api' + path, { headers, ...opts });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || res.statusText);
   return body;
@@ -321,8 +324,37 @@ async function renderPlans() {
   });
 }
 
+// ------------------------------------------------------------ operations
+async function renderOps() {
+  let dead, log;
+  try { [dead, log] = await Promise.all([api('/ops/dead-letters?all=true'), api('/ops/audit?limit=100')]); }
+  catch (e) { $view.innerHTML = `<h2>Operations</h2><div class="empty">${esc(e.message)}</div>`; return; }
+  const open = dead.filter(d => d.status === 'open');
+  const KIND = { extraction_failed: 'Batch could not be read', out_of_sync: 'Store and workflow disagree', restarted: 'Workflow restarted by the sweep' };
+  $view.innerHTML = `
+    <h2>Operations</h2>
+    <p class="lead">Work that could not finish by itself, what the hourly sweep fixed, and who did what. Leads and admins only.</p>
+    <div class="toolbar"><button class="act" id="sweep">Run the sweep now</button><span class="meta" id="sweepMsg"></span></div>
+    <h2 style="margin-top:8px">Dead letters <span class="meta">(${open.length} waiting)</span></h2>
+    ${dead.length ? `<table><thead><tr><th>What</th><th>Reference</th><th>Detail</th><th>Status</th><th></th></tr></thead><tbody>
+      ${dead.map(d => `<tr><td>${esc(KIND[d.kind] || d.kind)}<div class="meta">${when(d.createdAt)}</div></td><td class="meta">${esc(d.reference)}</td>
+        <td>${esc(d.error || '')}${d.messages.length ? `<div class="meta">${d.messages.length} message(s)</div>` : ''}</td><td>${pill(d.status)}</td>
+        <td>${d.status === 'open' ? `${d.kind === 'extraction_failed' ? `<button class="act primary" data-retry="${esc(d.id)}">Retry</button> ` : ''}<button class="act" data-dismiss="${esc(d.id)}">Dismiss</button>` : ''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">Nothing has failed.</div>'}
+    <h2 style="margin-top:20px">Audit log</h2>
+    ${log.length ? `<table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>On</th></tr></thead><tbody>
+      ${log.map(a => `<tr><td class="meta">${when(a.at)}</td><td>${esc(name(a.actor))}</td><td>${esc(a.action)}${a.detail ? `<div class="meta">${esc(a.detail)}</div>` : ''}</td><td class="meta">${esc(a.target || '')}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">No actions yet.</div>'}`;
+  document.getElementById('sweep').onclick = async () => {
+    try { const r = await post('/ops/reconcile', {}); document.getElementById('sweepMsg').textContent = 'Started ' + r.workflowId; setTimeout(render, 1500); }
+    catch (e) { document.getElementById('sweepMsg').textContent = e.message; }
+  };
+  $view.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => { try { await post(`/ops/dead-letters/${encodeURIComponent(b.dataset.retry)}/retry`, {}); render(); } catch (e) { alertInline(b, e.message); } });
+  $view.querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => { try { await post(`/ops/dead-letters/${encodeURIComponent(b.dataset.dismiss)}/dismiss`, {}); render(); } catch (e) { alertInline(b, e.message); } });
+}
+
 // ------------------------------------------------------------ shell
-const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, plans: renderPlans };
+const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, plans: renderPlans, ops: renderOps };
 async function render() {
   try { await views[state.tab](); }
   catch (e) { $view.innerHTML = `<div class="empty">Could not load: ${esc(e.message)}. Is the app running?</div>`; }
@@ -336,7 +368,7 @@ document.getElementById('tabs').onclick = e => {
 async function init() {
   try { state.people = await api('/people'); } catch { state.people = []; }
   const sel = document.getElementById('person');
-  sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.lead ? ' (lead)' : ''}</option>`).join('');
   state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
   if (state.person) sel.value = state.person;
   sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); };

@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: promise-graph
+    folder: Promise Graph
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

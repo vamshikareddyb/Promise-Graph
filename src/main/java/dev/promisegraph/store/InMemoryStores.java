@@ -4,6 +4,8 @@ import dev.promisegraph.handoff.Absence;
 import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.inbox.InboxItem;
 import dev.promisegraph.links.Link;
+import dev.promisegraph.ops.AuditEntry;
+import dev.promisegraph.ops.DeadLetter;
 import dev.promisegraph.recovery.NegotiationRecord;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -103,6 +105,56 @@ public final class InMemoryStores {
             Set<String> out = new TreeSet<>();
             items.values().stream().filter(i -> i.tenant().equals(tenant)).forEach(i -> out.add(i.recipient()));
             return List.copyOf(out);
+        }
+    }
+
+    public static final class DeadLetters implements DeadLetterStore {
+        private final Map<String, DeadLetter> byKey = new LinkedHashMap<>();
+
+        @Override
+        public synchronized boolean add(DeadLetter d) {
+            return byKey.putIfAbsent(d.tenant() + "\u001f" + d.id(), d) == null;
+        }
+
+        @Override
+        public synchronized Optional<DeadLetter> get(String tenant, String id) {
+            return Optional.ofNullable(byKey.get(tenant + "\u001f" + id));
+        }
+
+        @Override
+        public synchronized List<DeadLetter> list(String tenant, boolean openOnly) {
+            return byKey.values().stream().filter(d -> d.tenant().equals(tenant) && (!openOnly || d.status().equals("open")))
+                    .sorted(Comparator.comparing(DeadLetter::createdAt).reversed()).toList();
+        }
+
+        @Override
+        public synchronized boolean setStatus(String tenant, String id, String status) {
+            DeadLetter d = byKey.get(tenant + "\u001f" + id);
+            if (d == null) {
+                return false;
+            }
+            byKey.put(tenant + "\u001f" + id, d.withStatus(status));
+            return true;
+        }
+    }
+
+    public static final class Audit implements AuditLog {
+        private final List<AuditEntry> entries = new ArrayList<>();
+
+        @Override
+        public synchronized void record(AuditEntry e) {
+            entries.add(e);
+        }
+
+        @Override
+        public synchronized List<AuditEntry> recent(String tenant, int limit) {
+            List<AuditEntry> out = new ArrayList<>();
+            for (int i = entries.size() - 1; i >= 0 && out.size() < limit; i--) {
+                if (entries.get(i).tenant().equals(tenant)) {
+                    out.add(entries.get(i));
+                }
+            }
+            return out;
         }
     }
 

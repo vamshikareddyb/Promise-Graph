@@ -10,8 +10,11 @@ Every day, people at work make small commitments that are never written down any
 forgotten or quietly slips, the people depending on it find out too late. Promise Graph follows
 through on them, without anyone changing how they work.
 
-**Status:** Phase 1 (capture and track), Gmail reading, Phase 2 (links, ripple alerts, handoffs and
-a web inbox) and Phase 3 (recovery plans) are implemented. Phase 4 is hardening and a pilot.
+**Status:** all four build phases are implemented: capture and track, Gmail reading, links and
+handoffs, recovery plans, and hardening (idempotency, dead letters and a repair sweep, metrics,
+load and failure tests, replay tests, privacy). What remains is a pilot with real teams.
+[docs/write-up.md](docs/write-up.md) is the one-page summary; [docs/demo.md](docs/demo.md) is a
+five-minute demo.
 
 ## How it works
 
@@ -68,6 +71,7 @@ people read and answer everything in the web inbox (http://localhost:8787)
 | `store` | In-memory and Postgres stores. |
 | `web` | The JSON API; the page itself is `src/main/resources/static/index.html`. |
 | `sim`, `eval` | The simulated 20-person company and the Gate 1, 2 and 3 evaluations. |
+| `ops`, `privacy` | Dead letters, the repair sweep and the audit log; redaction and who-sees-what rules. |
 
 Built with Java 21, Spring Boot 3.5, Temporal Java SDK 1.40, Postgres and Gradle.
 
@@ -106,6 +110,8 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 | `PG_NEGOTIATION_CAPACITY` | `8` | The most open promises a plan may give one person |
 | `PG_NEGOTIATION_APPROVAL_HOURS` | `72` | How long leads have to choose, per round (reminder after 24) |
 | `PG_CUSTOMERS` | `Acme,Globex,Initech` | Customer names; a promise naming one counts as made to a customer |
+| `PG_ADMINS` | empty | People allowed on the Ops page besides team leads (e.g. yourself with personal Gmail) |
+| `PG_MANAGEMENT_PORT` / `PG_MANAGEMENT_ADDRESS` | `8788` / `127.0.0.1` | Health and Prometheus metrics; use `0.0.0.0` on Linux for the Prometheus container |
 | `PG_GMAIL_ENABLED` | `false` | Read a Gmail account (see the Gmail guide) |
 | `PG_WEBHOOK_TOKEN` | empty | Required to accept `POST /messages` |
 | `PG_CONFIDENCE_THRESHOLD` | `0.8` | Promises at or above this activate without confirmation |
@@ -114,7 +120,16 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 
 With `PG_STORE=jdbc`, a fresh database gets every migration automatically. An existing one needs
 the newer migrations applied once, in order, for example:
-`docker compose exec -T app-db psql -U promise -d promise_graph < migrations/003_phase3.sql`.
+`docker compose exec -T app-db psql -U promise -d promise_graph < migrations/004_phase4.sql`.
+
+### Operations
+
+- **Ops tab** (leads and `PG_ADMINS`): dead letters to retry or dismiss, the repair sweep, the audit log.
+- **Metrics:** `http://localhost:8788/actuator/prometheus`. With
+  `docker compose --profile observability up -d`, Prometheus (http://localhost:9090, with the alert
+  rules in `ops/prometheus/alerts.yml`) and Grafana (http://localhost:3000, dashboard "Promise Graph").
+- **Privacy:** every API call says who is viewing (the web app sends the person chosen at the top
+  right) and gets only what that person may see. There is no sign-in yet, so keep the app on localhost.
 
 ## Tests and quality gates
 
@@ -123,11 +138,15 @@ the newer migrations applied once, in order, for example:
 ./gradlew evalGate    # Gate 1: extraction precision must be at least 0.85
 ./gradlew evalGate2   # Gate 2: links, ripple, absences and cover picks on the core scenario
 ./gradlew evalGate3   # Gate 3: simulated leads approve at least half the recovery plans
+./gradlew loadTest -Pcount=50000 -PkillAt=0.5   # against a running Temporal: many promises, worker killed halfway
 ./gradlew check       # all of the above, as CI runs them
 ```
 
-CI (`.github/workflows/ci.yml`) runs `./gradlew check` on every push and pull request. The
-Postgres tests need Docker and are skipped without it.
+CI (`.github/workflows/ci.yml`) runs `./gradlew check` on every push and pull request. Besides
+unit and workflow tests it runs the idempotency audit (every activity twice), load and failure
+tests (300 promises with storage failing after writes; the worker killed mid-run), and replay
+tests (see [docs/versioning.md](docs/versioning.md)). The Postgres tests need Docker and are
+skipped without it.
 
 ## Progress
 
@@ -137,7 +156,7 @@ Postgres tests need Docker and are skipped without it.
 | Gmail | Read sent and received mail from a personal account | Done; awaiting a first run on a real mailbox |
 | Phase 2 | Links, ripple alerts, handoffs, the handoff agent, web inbox and app, Gate 2 | Done, except a ticket-system connector |
 | Phase 3 | Recovery plans, verifier, option agent, approval, apply-and-undo saga, team workflows, Gate 3 | Done |
-| Phase 4 | Hardening, load and failure tests, pilot | Next |
+| Phase 4 | Idempotency audit, dead letters and sweep, metrics and alerts, load and failure tests, replay tests, privacy, demo | Done, except the pilot (needs real teams: docs/pilot.md) |
 
 ## Honest notes on quality
 
@@ -158,7 +177,11 @@ Postgres tests need Docker and are skipped without it.
   would do this properly.
 - Teams, roles and leads come from the simulated company. For a personal Gmail account there is
   no team, so handoffs ask you to choose your own cover.
-- The web app has no login. It listens on localhost only; add authentication before exposing it.
+- The web app has no sign-in. Visibility rules are enforced on the server, but the viewer is
+  whoever the browser says, so it listens on localhost only; add authentication before exposing it.
+- CI's load test runs 300 promises on the test server. 50,000 against a real server is what
+  `./gradlew loadTest` is for; it has not been run as part of CI.
+- Metrics and alerts are in place; distributed tracing is not.
 - Times use UTC working hours (09:30 India time). Per-person time zones come later.
 
 See [docs/decisions.md](docs/decisions.md) for the main engineering decisions.

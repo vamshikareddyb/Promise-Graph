@@ -16,6 +16,7 @@ import dev.promisegraph.inbox.Signals;
 import dev.promisegraph.inbox.TemporalSignals;
 import dev.promisegraph.ingestion.IngestionGateway;
 import dev.promisegraph.notify.Notifier;
+import dev.promisegraph.privacy.Visibility;
 import dev.promisegraph.recovery.OptionAgent;
 import dev.promisegraph.recovery.RecoveryPlanning;
 import dev.promisegraph.recovery.RecoverySettings;
@@ -29,6 +30,8 @@ import dev.promisegraph.store.JdbcRepository;
 import dev.promisegraph.store.JdbcStores;
 import dev.promisegraph.store.LinkStore;
 import dev.promisegraph.store.NegotiationStore;
+import dev.promisegraph.store.AuditLog;
+import dev.promisegraph.store.DeadLetterStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.ExtractionWorkflow;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
@@ -95,6 +98,18 @@ public class AppConfig {
         return d == null ? new InMemoryStores.Negotiations() : new JdbcStores.Negotiations(new NamedParameterJdbcTemplate(d));
     }
 
+    @Bean
+    DeadLetterStore deadLetterStore(ObjectProvider<HikariDataSource> ds) {
+        HikariDataSource d = ds.getIfAvailable();
+        return d == null ? new InMemoryStores.DeadLetters() : new JdbcStores.DeadLetters(new NamedParameterJdbcTemplate(d));
+    }
+
+    @Bean
+    AuditLog auditLog(ObjectProvider<HikariDataSource> ds) {
+        HikariDataSource d = ds.getIfAvailable();
+        return d == null ? new InMemoryStores.Audit() : new JdbcStores.Audit(new NamedParameterJdbcTemplate(d));
+    }
+
     // ------------------------------------------------------------ extraction, notifications, people
 
     @Bean
@@ -131,6 +146,11 @@ public class AppConfig {
                     handoff.agentMaxSteps(), rules);
         }
         return rules;
+    }
+
+    @Bean
+    Visibility visibility(Directory directory, PrivacyProperties privacy) {
+        return new Visibility(directory, privacy.admins());
     }
 
     // ------------------------------------------------------------ negotiations

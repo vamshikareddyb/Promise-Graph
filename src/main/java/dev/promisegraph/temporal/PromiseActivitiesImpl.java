@@ -30,6 +30,7 @@ import dev.promisegraph.temporal.Contracts.PromiseSignal;
 import dev.promisegraph.temporal.Contracts.PromiseWorkflowInput;
 import dev.promisegraph.temporal.Contracts.RecordRequest;
 import dev.promisegraph.temporal.Contracts.ResolveRequest;
+import io.micrometer.core.instrument.Metrics;
 import io.temporal.activity.Activity;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.WorkflowClient;
@@ -197,8 +198,10 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
     public void recordPromise(RecordRequest req) {
         Promise p = req.promise();
         repo.savePromise(p);
-        repo.appendEvent(new PromiseEvent(p.tenant(), p.id(), req.eventKind(), req.actor(), p.updatedAt(),
-                p.id() + ":" + p.version(), req.detail()));
+        if (repo.appendEvent(new PromiseEvent(p.tenant(), p.id(), req.eventKind(), req.actor(), p.updatedAt(),
+                p.id() + ":" + p.version(), req.detail()))) {
+            Metrics.counter("promisegraph.promise.events", "kind", req.eventKind()).increment();
+        }
     }
 
     /** A crash between sending and recording can repeat one message; we accept that over losing it. */
@@ -209,6 +212,7 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
         }
         notifier.send(n);
         repo.recordNotification(n.tenant(), n.key(), n.recipient());
+        Metrics.counter("promisegraph.notifications.sent", "actionable", String.valueOf(!n.actions().isEmpty())).increment();
         return true;
     }
 

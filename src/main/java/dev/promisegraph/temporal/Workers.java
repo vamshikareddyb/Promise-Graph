@@ -21,7 +21,8 @@ public final class Workers {
             ModelActivities model,
             PlanningActivities planning,
             NegotiationActivities negotiations,
-            RecoveryActivities recovery) {}
+            RecoveryActivities recovery,
+            OpsActivities ops) {}
 
     /**
      * @param newWorker creates a worker for a task queue, e.g. {@code factory::newWorker}
@@ -32,8 +33,9 @@ public final class Workers {
         Worker main = newWorker.apply(TASK_QUEUE_MAIN, WorkerOptions.getDefaultInstance());
         main.registerWorkflowImplementationTypes(ExtractionWorkflowImpl.class, PromiseWorkflowImpl.class,
                 DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class, RippleWorkflowImpl.class, HandoffWorkflowImpl.class,
-                NegotiationWorkflowImpl.class, TeamWorkflowImpl.class);
-        main.registerActivitiesImplementations(activities.promises(), activities.links(), activities.handoffs(), activities.negotiations());
+                NegotiationWorkflowImpl.class, TeamWorkflowImpl.class, ReconcileWorkflowImpl.class);
+        main.registerActivitiesImplementations(activities.promises(), activities.links(), activities.handoffs(), activities.negotiations(),
+                activities.ops());
 
         // Model calls (extraction, the handoff agent, the option agent) get their own queue and a concurrency cap.
         Worker llm = newWorker.apply(TASK_QUEUE_LLM,

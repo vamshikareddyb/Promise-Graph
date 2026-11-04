@@ -13,18 +13,26 @@ import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.HandoffStore;
 import dev.promisegraph.store.LinkStore;
 import dev.promisegraph.store.NegotiationStore;
+import dev.promisegraph.store.AuditLog;
+import dev.promisegraph.store.DeadLetterStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.DigestWorkflow;
 import dev.promisegraph.temporal.HandoffActivitiesImpl;
 import dev.promisegraph.temporal.LinkActivitiesImpl;
 import dev.promisegraph.temporal.ModelActivitiesImpl;
 import dev.promisegraph.temporal.NegotiationActivitiesImpl;
+import dev.promisegraph.temporal.OpsActivitiesImpl;
+import dev.promisegraph.temporal.ReconcileWorkflow;
 import dev.promisegraph.temporal.PlanningActivitiesImpl;
 import dev.promisegraph.temporal.PromiseActivitiesImpl;
 import dev.promisegraph.temporal.RecoveryActivitiesImpl;
 import dev.promisegraph.temporal.SituationLoader;
 import dev.promisegraph.temporal.Workers;
+import com.uber.m3.tally.RootScopeBuilder;
+import com.uber.m3.tally.Scope;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.temporal.client.WorkflowClient;
+import io.temporal.common.reporter.MicrometerClientStatsReporter;
 import io.temporal.client.WorkflowClientOptions;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
@@ -56,10 +64,21 @@ public class TemporalConfig {
     /** 08:47 India time on weekdays (03:17 UTC). Off the hour so runs don't pile up at :00. */
     static final String DIGEST_CRON = "17 3 * * 1-5";
 
+    /** Hourly, off the hour: the sweep that restarts promise workflows that died. */
+    static final String RECONCILE_CRON = "41 * * * *";
+
+    /** Temporal's own metrics (task latencies, failures, slots) go to the same Prometheus endpoint as ours. */
     @Bean(destroyMethod = "shutdown")
-    WorkflowServiceStubs serviceStubs(PromiseGraphProperties props) {
-        return WorkflowServiceStubs.newServiceStubs(
-                WorkflowServiceStubsOptions.newBuilder().setTarget(props.temporal().address()).build());
+    WorkflowServiceStubs serviceStubs(PromiseGraphProperties props, ObjectProvider<MeterRegistry> registry) {
+        WorkflowServiceStubsOptions.Builder options = WorkflowServiceStubsOptions.newBuilder().setTarget(props.temporal().address());
+        MeterRegistry meters = registry.getIfAvailable();
+        if (meters != null) {
+            Scope scope = new RootScopeBuilder()
+                    .reporter(new MicrometerClientStatsReporter(meters))
+                    .reportEvery(com.uber.m3.util.Duration.ofSeconds(10));
+            options.setMetricsScope(scope);
+        }
+        return WorkflowServiceStubs.newServiceStubs(options.build());
     }
 
     @Bean
@@ -89,7 +108,8 @@ public class TemporalConfig {
     Workers.Activities activities(PromiseActivitiesImpl promises, ModelActivitiesImpl model, Repository repo, LinkStore links,
             HandoffStore handoffs, HandoffScheduler scheduler, HandoffPlanning.Planner planner, Directory directory,
             WorkflowClient client, SituationLoader situations, NegotiationStore negotiationStore,
-            RecoveryPlanning.Planner recoveryPlanner, NegotiationProperties negotiation) {
+            RecoveryPlanning.Planner recoveryPlanner, NegotiationProperties negotiation, DeadLetterStore deadLetters, AuditLog audit,
+            TimingPolicy policy, PromiseGraphProperties props) {
         NegotiationActivitiesImpl.Policy policy = new NegotiationActivitiesImpl.Policy(negotiation.enabled(), negotiation.approvalHours(),
                 negotiation.reminderHours(), negotiation.maxRounds(), negotiation.teamChecks());
         return new Workers.Activities(
@@ -99,7 +119,8 @@ public class TemporalConfig {
                 model,
                 new PlanningActivitiesImpl(planner, repo, links, handoffs, directory),
                 new NegotiationActivitiesImpl(situations, repo, negotiationStore, promises, client, policy, Clock.systemUTC()),
-                new RecoveryActivitiesImpl(recoveryPlanner, situations));
+                new RecoveryActivitiesImpl(recoveryPlanner, situations),
+                new OpsActivitiesImpl(repo, deadLetters, audit, client, policy, props.confidenceThreshold()));
     }
 
     @Bean(destroyMethod = "shutdown")
@@ -129,20 +150,26 @@ public class TemporalConfig {
     static void ensureSchedules(WorkflowServiceStubs stubs, PromiseGraphProperties props) {
         ScheduleClient schedules = ScheduleClient.newInstance(stubs,
                 ScheduleClientOptions.newBuilder().setNamespace(props.temporal().namespace()).build());
+        ensure(schedules, "digest-" + props.tenant(), DigestWorkflow.class, "digest-run-" + props.tenant(), DIGEST_CRON, props);
+        ensure(schedules, "reconcile-" + props.tenant(), ReconcileWorkflow.class, "reconcile-run-" + props.tenant(), RECONCILE_CRON, props);
+    }
+
+    private static void ensure(ScheduleClient schedules, String scheduleId, Class<?> workflow, String workflowId, String cron,
+            PromiseGraphProperties props) {
         Schedule schedule = Schedule.newBuilder()
                 .setAction(ScheduleActionStartWorkflow.newBuilder()
-                        .setWorkflowType(DigestWorkflow.class)
+                        .setWorkflowType(workflow)
                         .setArguments(props.tenant())
                         .setOptions(WorkflowOptions.newBuilder()
-                                .setWorkflowId("digest-run-" + props.tenant())
+                                .setWorkflowId(workflowId)
                                 .setTaskQueue(PromiseGraphProperties.TASK_QUEUE_MAIN)
                                 .build())
                         .build())
-                .setSpec(ScheduleSpec.newBuilder().setCronExpressions(List.of(DIGEST_CRON)).build())
+                .setSpec(ScheduleSpec.newBuilder().setCronExpressions(List.of(cron)).build())
                 .build();
         try {
-            schedules.createSchedule("digest-" + props.tenant(), schedule, ScheduleOptions.newBuilder().build());
-            log.info("created digest schedule");
+            schedules.createSchedule(scheduleId, schedule, ScheduleOptions.newBuilder().build());
+            log.info("created schedule {}", scheduleId);
         } catch (ScheduleAlreadyRunningException e) {
             // already there
         }

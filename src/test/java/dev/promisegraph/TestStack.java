@@ -15,11 +15,13 @@ import dev.promisegraph.recovery.RulePlanner;
 import dev.promisegraph.sim.Company;
 import dev.promisegraph.store.InMemoryRepository;
 import dev.promisegraph.store.InMemoryStores;
+import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.HandoffActivitiesImpl;
 import dev.promisegraph.temporal.LinkActivitiesImpl;
 import dev.promisegraph.temporal.ModelActivitiesImpl;
 import dev.promisegraph.temporal.NegotiationActivities;
 import dev.promisegraph.temporal.NegotiationActivitiesImpl;
+import dev.promisegraph.temporal.OpsActivitiesImpl;
 import dev.promisegraph.temporal.PlanningActivitiesImpl;
 import dev.promisegraph.temporal.PromiseActivitiesImpl;
 import dev.promisegraph.temporal.RecoveryActivitiesImpl;
@@ -42,6 +44,8 @@ public final class TestStack {
     public final InMemoryStores.Inbox inbox = new InMemoryStores.Inbox();
     public final InMemoryStores.Handoffs handoffs = new InMemoryStores.Handoffs();
     public final InMemoryStores.Negotiations negotiations = new InMemoryStores.Negotiations();
+    public final InMemoryStores.DeadLetters deadLetters = new InMemoryStores.DeadLetters();
+    public final InMemoryStores.Audit audit = new InMemoryStores.Audit();
     public final RecordingNotifier recorded = new RecordingNotifier();
     public final Directory directory = new Directory(Company.PEOPLE);
     public final Clock clock;
@@ -83,8 +87,25 @@ public final class TestStack {
 
     public TestStack(TestWorkflowEnvironment env, HandoffPlanning.Planner planner, RecoveryPlanning.Planner recoveryPlanner,
             NegotiationActivitiesImpl.Policy policy) {
-        client = env.getWorkflowClient();
-        clock = new EnvClock(env);
+        this(env, planner, recoveryPlanner, policy, r -> r);
+    }
+
+    /**
+     * @param faults wraps the repository the activities use, e.g. with {@link FlakyRepository};
+     *     {@link #repo} stays the plain store, for assertions
+     */
+    public TestStack(TestWorkflowEnvironment env, HandoffPlanning.Planner planner, RecoveryPlanning.Planner recoveryPlanner,
+            NegotiationActivitiesImpl.Policy policy, java.util.function.UnaryOperator<Repository> faults) {
+        this(env.getWorkflowClient(), new EnvClock(env), planner, recoveryPlanner, policy, faults);
+    }
+
+    /** Against any Temporal server, e.g. a real one for the load runner. */
+    public TestStack(WorkflowClient workflowClient, Clock stackClock, HandoffPlanning.Planner planner,
+            RecoveryPlanning.Planner recoveryPlanner, NegotiationActivitiesImpl.Policy policy,
+            java.util.function.UnaryOperator<Repository> faults) {
+        Repository repo = faults.apply(this.repo);
+        client = workflowClient;
+        clock = stackClock;
         InboxNotifier toInbox = new InboxNotifier(inbox, clock);
         Notifier notifier = n -> {
             toInbox.send(n);
@@ -102,13 +123,14 @@ public final class TestStack {
                 new ModelActivitiesImpl(new RuleBasedExtractor(), Company.directory()),
                 new PlanningActivitiesImpl(planner, repo, links, handoffs, directory),
                 negotiationActivities,
-                new RecoveryActivitiesImpl(recoveryPlanner, situations));
+                new RecoveryActivitiesImpl(recoveryPlanner, situations),
+                new OpsActivitiesImpl(repo, deadLetters, audit, client, TimingPolicy.defaults(), 0.8));
     }
 
     /** The same wiring with different negotiation activities, e.g. one that fails a step. */
     public Workers.Activities withNegotiations(NegotiationActivities replacement) {
         return new Workers.Activities(activities.promises(), activities.links(), activities.handoffs(), activities.model(),
-                activities.planning(), replacement, activities.recovery());
+                activities.planning(), replacement, activities.recovery(), activities.ops());
     }
 
     public WorkflowClient client() {

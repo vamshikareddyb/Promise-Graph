@@ -27,6 +27,7 @@ import dev.promisegraph.temporal.NegotiationContracts.TeamAnswer;
 import dev.promisegraph.temporal.NegotiationContracts.TeamInput;
 import dev.promisegraph.temporal.NegotiationContracts.Trigger;
 import dev.promisegraph.temporal.NegotiationContracts.Vote;
+import io.micrometer.core.instrument.Metrics;
 import io.temporal.api.enums.v1.WorkflowIdReusePolicy;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowException;
@@ -150,7 +151,11 @@ public class NegotiationActivitiesImpl implements NegotiationActivities {
 
     @Override
     public void saveNegotiation(NegotiationRecord negotiation) {
+        String before = store.get(negotiation.tenant(), negotiation.id()).map(NegotiationRecord::status).orElse(null);
         store.save(negotiation);
+        if (!negotiation.status().equals(before)) {
+            Metrics.counter("promisegraph.negotiations", "status", negotiation.status()).increment();
+        }
     }
 
     // ------------------------------------------------------------ team capacity

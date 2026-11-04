@@ -24,6 +24,8 @@ val temporalVersion = "1.40.0"
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     implementation("io.temporal:temporal-sdk:$temporalVersion")
     runtimeOnly("org.postgresql:postgresql")
 
@@ -106,6 +108,16 @@ tasks.register<JavaExec>("evalGate3") {
     description = "Evaluates recovery plans against simulated leads' stated preferences (Gate 3)."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass = "dev.promisegraph.eval.RecoveryEval"
+}
+
+// Load and failure test against a running Temporal server: ./gradlew loadTest -Pcount=50000 -PkillAt=0.5
+tasks.register<JavaExec>("loadTest") {
+    group = "verification"
+    description = "Runs many promise workflows against a real Temporal server, optionally killing the worker midway."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.promisegraph.load.LoadRunner"
+    args("--count", (project.findProperty("count") ?: "1000").toString(),
+        "--kill-at", (project.findProperty("killAt") ?: "0").toString())
 }
 
 tasks.named("check") {

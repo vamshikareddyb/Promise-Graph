@@ -12,7 +12,10 @@ import dev.promisegraph.inbox.InboxItem;
 import dev.promisegraph.inbox.InboxService;
 import dev.promisegraph.inbox.Signals;
 import dev.promisegraph.links.Link;
+import dev.promisegraph.ops.AuditEntry;
+import dev.promisegraph.privacy.Visibility;
 import dev.promisegraph.recovery.NegotiationRecord;
+import dev.promisegraph.store.AuditLog;
 import dev.promisegraph.store.HandoffStore;
 import dev.promisegraph.store.InboxStore;
 import dev.promisegraph.store.LinkStore;
@@ -29,6 +32,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,19 +41,26 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The JSON API behind the web app. It has no login yet, so the server listens on localhost only
- * (see {@code server.address}); add authentication before exposing it.
+ * The JSON API behind the web app. Every request says who is viewing ({@value #VIEWER}), and
+ * every answer is filtered by {@link Visibility}; every change is recorded in the audit log.
+ *
+ * <p>There is no login yet: the viewer is whoever the browser says, so the server listens on
+ * localhost only (see {@code server.address}). The rules are enforced here, server-side, so
+ * adding real sign-in later only has to replace where the viewer comes from.
  */
 @RestController
 @RequestMapping("/api")
 public class ApiController {
 
-    public record PersonView(String id, String name, String team, String role) {}
+    public static final String VIEWER = "X-PG-Viewer";
+
+    public record PersonView(String id, String name, String team, String role, boolean lead) {}
 
     public record PromiseView(String id, String owner, String what, String due, String status, String createdAt,
             String latestQuote, List<String> dependsOn, List<String> blocks) {}
@@ -80,9 +91,12 @@ public class ApiController {
     private final HandoffScheduler scheduler;
     private final Signals signals;
     private final NegotiationStore negotiations;
+    private final Visibility visibility;
+    private final AuditLog audit;
 
     public ApiController(PromiseGraphProperties props, Repository repo, LinkStore links, InboxStore inbox, HandoffStore handoffs,
-            Directory directory, InboxService inboxService, HandoffScheduler scheduler, Signals signals, NegotiationStore negotiations) {
+            Directory directory, InboxService inboxService, HandoffScheduler scheduler, Signals signals, NegotiationStore negotiations,
+            Visibility visibility, AuditLog audit) {
         this.tenant = props.tenant();
         this.repo = repo;
         this.links = links;
@@ -93,6 +107,33 @@ public class ApiController {
         this.scheduler = scheduler;
         this.signals = signals;
         this.negotiations = negotiations;
+        this.visibility = visibility;
+        this.audit = audit;
+    }
+
+    // ------------------------------------------------------------ who is asking
+
+    static String require(String viewer) {
+        if (viewer == null || viewer.isBlank()) {
+            throw new InboxService.ActionException(401, "say who is viewing with the " + VIEWER + " header");
+        }
+        return viewer.strip();
+    }
+
+    private void record(String actor, String action, String target, String detail) {
+        audit.record(new AuditEntry(tenant, Instant.now().toString(), actor, action, target, detail));
+    }
+
+    private Set<String> visibleIds(String viewer) {
+        return visibility.visibleIds(viewer, repo.promisesByStatus(tenant, EnumSet.allOf(PromiseStatus.class)), links.links(tenant),
+                negotiations.list(tenant), handoffs.handoffs(tenant));
+    }
+
+    /** Changing a handoff is for the person away and their lead. */
+    private void requirePersonOrLead(String viewer, String person) {
+        if (!viewer.equals(person) && !visibility.isLeadOf(viewer, person) && !visibility.canOperate(viewer)) {
+            throw new InboxService.ActionException(403, "only " + person + " or their lead can do that");
+        }
     }
 
     // ------------------------------------------------------------ people
@@ -101,12 +142,12 @@ public class ApiController {
     public List<PersonView> people() {
         Map<String, PersonView> out = new LinkedHashMap<>();
         for (Person p : directory.people()) {
-            out.put(p.id(), new PersonView(p.id(), p.name(), p.team(), p.role()));
+            out.put(p.id(), new PersonView(p.id(), p.name(), p.team(), p.role(), p.lead()));
         }
         TreeSet<String> others = new TreeSet<>(inbox.recipients(tenant));
         repo.promisesByStatus(tenant, EnumSet.allOf(PromiseStatus.class)).forEach(p -> others.add(p.owner()));
         for (String id : others) {
-            out.putIfAbsent(id, new PersonView(id, id, "", ""));
+            out.putIfAbsent(id, new PersonView(id, id, "", "", false));
         }
         return new ArrayList<>(out.values());
     }
@@ -114,12 +155,16 @@ public class ApiController {
     // ------------------------------------------------------------ promises and links
 
     @GetMapping("/promises")
-    public List<PromiseView> promises(@RequestParam(defaultValue = "false") boolean all) {
-        List<Promise> ps = repo.promisesByStatus(tenant, all ? EnumSet.allOf(PromiseStatus.class) : OPEN);
+    public List<PromiseView> promises(@RequestHeader(name = VIEWER, required = false) String viewerHeader,
+            @RequestParam(defaultValue = "false") boolean all) {
+        String viewer = require(viewerHeader);
+        Set<String> visible = visibleIds(viewer);
+        List<Promise> ps = repo.promisesByStatus(tenant, all ? EnumSet.allOf(PromiseStatus.class) : OPEN).stream()
+                .filter(p -> visible.contains(p.id())).toList();
         Map<String, List<String>> dependsOn = new HashMap<>();
         Map<String, List<String>> blocks = new HashMap<>();
         for (Link l : links.links(tenant)) {
-            if (l.status() == Link.Status.CONFIRMED) {
+            if (l.status() == Link.Status.CONFIRMED && visible.contains(l.from()) && visible.contains(l.to())) {
                 dependsOn.computeIfAbsent(l.to(), k -> new ArrayList<>()).add(l.from());
                 blocks.computeIfAbsent(l.from(), k -> new ArrayList<>()).add(l.to());
             }
@@ -127,15 +172,19 @@ public class ApiController {
         return ps.stream()
                 .sorted(Comparator.comparing((Promise p) -> p.due() == null ? "9999" : p.due()).thenComparing(Promise::id))
                 .map(p -> new PromiseView(p.id(), p.owner(), p.what(), p.due(), p.status().dbValue(), p.createdAt(),
-                        p.evidence().isEmpty() ? null : p.evidence().get(p.evidence().size() - 1).quote(),
+                        p.evidence().isEmpty() || !visibility.canSeeQuotes(viewer, p) ? null : p.evidence().get(p.evidence().size() - 1).quote(),
                         dependsOn.getOrDefault(p.id(), List.of()), blocks.getOrDefault(p.id(), List.of())))
                 .toList();
     }
 
     @GetMapping("/links")
-    public List<LinkView> links() {
+    public List<LinkView> links(@RequestHeader(name = VIEWER, required = false) String viewerHeader) {
+        Set<String> visible = visibleIds(require(viewerHeader));
         List<LinkView> out = new ArrayList<>();
         for (Link l : links.links(tenant)) {
+            if (!visible.contains(l.from()) || !visible.contains(l.to())) {
+                continue;
+            }
             Promise f = repo.getPromise(tenant, l.from()).orElse(null);
             Promise t = repo.getPromise(tenant, l.to()).orElse(null);
             out.add(new LinkView(l.from(), l.to(), l.status().dbValue(), l.reason(),
@@ -146,59 +195,86 @@ public class ApiController {
     }
 
     @PostMapping("/links")
-    public ResponseEntity<Map<String, String>> addLink(@RequestBody NewLink req) {
+    public ResponseEntity<Map<String, String>> addLink(@RequestHeader(name = VIEWER, required = false) String viewerHeader,
+            @RequestBody NewLink req) {
+        String viewer = require(viewerHeader);
         if (req.from() == null || req.to() == null || req.from().equals(req.to())) {
             throw new IllegalArgumentException("a link needs two different promises");
         }
-        if (repo.getPromise(tenant, req.from()).isEmpty() || repo.getPromise(tenant, req.to()).isEmpty()) {
-            throw new IllegalArgumentException("unknown promise");
+        Set<String> visible = visibleIds(viewer);
+        if (!visible.contains(req.from()) || !visible.contains(req.to())) {
+            throw new InboxService.ActionException(404, "unknown promise");
         }
-        String by = req.by() == null ? "web" : req.by();
-        boolean created = links.addLink(new Link(tenant, req.from(), req.to(), Link.Status.CONFIRMED, "added by hand", by, by,
+        Promise to = repo.getPromise(tenant, req.to()).orElseThrow(() -> new InboxService.ActionException(404, "unknown promise"));
+        requirePersonOrLead(viewer, to.owner()); // the dependent promise's owner says what it waits on
+        boolean created = links.addLink(new Link(tenant, req.from(), req.to(), Link.Status.CONFIRMED, "added by hand", viewer, viewer,
                 Instant.now().toString()));
         if (!created) {
-            links.decide(tenant, req.from(), req.to(), Link.Status.CONFIRMED, by);
+            links.decide(tenant, req.from(), req.to(), Link.Status.CONFIRMED, viewer);
         }
+        record(viewer, "link:add", req.from() + ">" + req.to(), null);
         return ResponseEntity.status(created ? HttpStatus.CREATED : HttpStatus.OK).body(Map.of("status", "confirmed"));
     }
 
     @PostMapping("/links/decision")
-    public Map<String, String> decideLink(@RequestBody LinkDecision req) {
+    public Map<String, String> decideLink(@RequestHeader(name = VIEWER, required = false) String viewerHeader,
+            @RequestBody LinkDecision req) {
+        String viewer = require(viewerHeader);
         Link.Status status = switch (req.decision() == null ? "" : req.decision()) {
             case "confirm" -> Link.Status.CONFIRMED;
             case "reject" -> Link.Status.REJECTED;
             default -> throw new IllegalArgumentException("decision is confirm or reject");
         };
-        if (!links.decide(tenant, req.from(), req.to(), status, req.by() == null ? "web" : req.by())) {
+        Promise to = repo.getPromise(tenant, req.to() == null ? "" : req.to())
+                .orElseThrow(() -> new InboxService.ActionException(404, "no such link"));
+        requirePersonOrLead(viewer, to.owner());
+        if (!links.decide(tenant, req.from(), req.to(), status, viewer)) {
             throw new InboxService.ActionException(404, "no such link");
         }
+        record(viewer, "link:" + req.decision(), req.from() + ">" + req.to(), null);
         return Map.of("status", status.dbValue());
     }
 
     // ------------------------------------------------------------ inbox
 
     @GetMapping("/inbox")
-    public List<InboxItem> inbox(@RequestParam String person, @RequestParam(defaultValue = "false") boolean all) {
+    public List<InboxItem> inbox(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @RequestParam String person,
+            @RequestParam(defaultValue = "false") boolean all) {
+        if (!require(viewerHeader).equals(person)) {
+            throw new InboxService.ActionException(403, "an inbox is only shown to its owner");
+        }
         return inbox.inbox(tenant, person, !all);
     }
 
     @PostMapping("/inbox/{key}/actions")
-    public InboxItem act(@PathVariable String key, @RequestBody InboxService.ActionRequest req) {
-        return inboxService.act(tenant, key, req);
+    public InboxItem act(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String key,
+            @RequestBody InboxService.ActionRequest req) {
+        String viewer = require(viewerHeader);
+        InboxItem item = inbox.getItem(tenant, key).orElseThrow(() -> new InboxService.ActionException(404, "no such inbox item"));
+        if (!item.recipient().equals(viewer)) {
+            throw new InboxService.ActionException(403, "only " + item.recipient() + " can answer this");
+        }
+        InboxItem done = inboxService.act(tenant, key, new InboxService.ActionRequest(req.action(), viewer, req.due(), req.what()));
+        record(viewer, "inbox:" + req.action(), item.subject() != null ? item.subject() : item.promiseId(), req.due());
+        return done;
     }
 
     // ------------------------------------------------------------ absences and handoffs
 
     @GetMapping("/handoffs")
-    public List<HandoffRecord> handoffs() {
-        return handoffs.handoffs(tenant);
+    public List<HandoffRecord> handoffs(@RequestHeader(name = VIEWER, required = false) String viewerHeader) {
+        String viewer = require(viewerHeader);
+        return handoffs.handoffs(tenant).stream().map(h -> visibility.view(viewer, h)).flatMap(java.util.Optional::stream).toList();
     }
 
     @PostMapping("/absences")
-    public ResponseEntity<Map<String, String>> addAbsence(@RequestBody NewAbsence req) {
+    public ResponseEntity<Map<String, String>> addAbsence(@RequestHeader(name = VIEWER, required = false) String viewerHeader,
+            @RequestBody NewAbsence req) {
+        String viewer = require(viewerHeader);
         if (req.person() == null || req.person().isBlank() || req.startsOn() == null) {
             throw new IllegalArgumentException("person and startsOn are required");
         }
+        requirePersonOrLead(viewer, req.person().strip());
         Absence a;
         try {
             a = new Absence(tenant, req.person().strip(), req.startsOn(), req.endsOn() == null || req.endsOn().isBlank() ? null : req.endsOn(),
@@ -207,63 +283,90 @@ public class ApiController {
             throw new IllegalArgumentException("dates look like 2026-11-20");
         }
         boolean started = scheduler.schedule(a);
+        record(viewer, "absence:add", a.handoffId(), a.startsOn() + " to " + a.endsOn());
         return ResponseEntity.status(started ? HttpStatus.CREATED : HttpStatus.OK)
                 .body(Map.of("handoff", a.handoffId(), "status", started ? "scheduled" : "already scheduled or in the past"));
     }
 
+    private HandoffRecord handoff(String id) {
+        return handoffs.getHandoff(tenant, id).orElseThrow(() -> new InboxService.ActionException(404, "no such handoff"));
+    }
+
     @PostMapping("/handoffs/{id}/assign")
-    public Map<String, String> assign(@PathVariable String id, @RequestBody Assignment req) {
+    public Map<String, String> assign(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String id,
+            @RequestBody Assignment req) {
+        String viewer = require(viewerHeader);
         if (req.promiseId() == null || req.owner() == null || req.owner().isBlank()) {
             throw new IllegalArgumentException("promiseId and owner are required");
         }
-        signals.toHandoff(id, new HandoffResponse("assign", req.promiseId(), req.by() == null ? "web" : req.by(), req.owner().strip(),
+        requirePersonOrLead(viewer, handoff(id).person());
+        signals.toHandoff(id, new HandoffResponse("assign", req.promiseId(), viewer, req.owner().strip(),
                 "web:" + req.promiseId() + ":" + req.owner().strip()));
+        record(viewer, "handoff:assign", id + ":" + req.promiseId(), req.owner().strip());
         return Map.of("status", "asked " + req.owner().strip());
     }
 
     @PostMapping("/handoffs/{id}/cancel")
-    public Map<String, String> cancel(@PathVariable String id) {
-        signals.toHandoff(id, new HandoffResponse("cancel", null, "web", null, "web:cancel"));
+    public Map<String, String> cancel(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String id) {
+        String viewer = require(viewerHeader);
+        requirePersonOrLead(viewer, handoff(id).person());
+        signals.toHandoff(id, new HandoffResponse("cancel", null, viewer, null, "web:cancel"));
+        record(viewer, "handoff:cancel", id, null);
         return Map.of("status", "cancelling");
     }
 
     // ------------------------------------------------------------ negotiations
 
     @GetMapping("/negotiations")
-    public List<NegotiationRecord> negotiations() {
-        return negotiations.list(tenant);
+    public List<NegotiationRecord> negotiations(@RequestHeader(name = VIEWER, required = false) String viewerHeader) {
+        String viewer = require(viewerHeader);
+        return negotiations.list(tenant).stream().filter(n -> visibility.canSee(viewer, n) || visibility.canOperate(viewer)).toList();
     }
 
     @GetMapping("/negotiations/{id}")
-    public NegotiationRecord negotiation(@PathVariable String id) {
-        return negotiations.get(tenant, id).orElseThrow(() -> new InboxService.ActionException(404, "no such negotiation"));
+    public NegotiationRecord negotiation(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String id) {
+        String viewer = require(viewerHeader);
+        NegotiationRecord n = negotiations.get(tenant, id).orElseThrow(() -> new InboxService.ActionException(404, "no such negotiation"));
+        if (!visibility.canSee(viewer, n) && !visibility.canOperate(viewer)) {
+            throw new InboxService.ActionException(404, "no such negotiation");
+        }
+        return n;
     }
 
-    /** An approver's choice from the Plans page. The workflow ignores votes from non-approvers and for old rounds. */
+    /** An approver's choice from the Plans page. The workflow ignores votes for old rounds. */
     @PostMapping("/negotiations/{id}/vote")
-    public Map<String, String> vote(@PathVariable String id, @RequestBody PlanVote req) {
-        if (req.by() == null || req.by().isBlank() || req.plan() == null || req.plan().isBlank()) {
-            throw new IllegalArgumentException("by and plan are required");
+    public Map<String, String> vote(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String id,
+            @RequestBody PlanVote req) {
+        String viewer = require(viewerHeader);
+        if (req.plan() == null || req.plan().isBlank()) {
+            throw new IllegalArgumentException("plan is required");
         }
-        NegotiationRecord n = negotiation(id);
-        if (!n.approvers().contains(req.by().strip())) {
-            throw new InboxService.ActionException(403, req.by().strip() + " is not an approver of this negotiation");
+        NegotiationRecord n = negotiation(viewer, id);
+        if (!n.approvers().contains(viewer)) {
+            throw new InboxService.ActionException(403, viewer + " is not an approver of this negotiation");
         }
         String plan = req.plan().strip();
         boolean reject = plan.equalsIgnoreCase("reject");
         if (!reject && n.plan(plan).isEmpty()) {
             throw new IllegalArgumentException("this round offers plans " + n.plans().stream().map(p -> p.id()).toList());
         }
-        String by = req.by().strip();
-        signals.toNegotiation(id, new Vote(reject ? "reject" : "approve", req.round(), reject ? null : plan, by, req.reason(),
-                "web:" + req.round() + ":" + by + ":" + plan));
+        signals.toNegotiation(id, new Vote(reject ? "reject" : "approve", req.round(), reject ? null : plan, viewer, req.reason(),
+                "web:" + req.round() + ":" + viewer + ":" + plan));
+        record(viewer, "negotiation:" + (reject ? "reject" : "approve " + plan), id, req.reason());
         return Map.of("status", reject ? "rejected" : "chose plan " + plan);
     }
 
     @PostMapping("/negotiations/{id}/cancel")
-    public Map<String, String> cancelNegotiation(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
-        String by = body == null || body.get("by") == null ? "web" : body.get("by");
-        signals.toNegotiation(id, Vote.stop("cancel", by, body == null ? null : body.get("reason"), "web:cancel"));
+    public Map<String, String> cancelNegotiation(@RequestHeader(name = VIEWER, required = false) String viewerHeader,
+            @PathVariable String id, @RequestBody(required = false) Map<String, String> body) {
+        String viewer = require(viewerHeader);
+        NegotiationRecord n = negotiation(viewer, id);
+        if (!n.approvers().contains(viewer) && !visibility.canOperate(viewer)) {
+            throw new InboxService.ActionException(403, "only an approver can cancel a negotiation");
+        }
+        String reason = body == null ? null : body.get("reason");
+        signals.toNegotiation(id, Vote.stop("cancel", viewer, reason, "web:cancel"));
+        record(viewer, "negotiation:cancel", id, reason);
         return Map.of("status", "cancelling");
     }
 

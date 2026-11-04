@@ -98,7 +98,10 @@ public final class HandoffActivitiesImpl implements HandoffActivities {
                 continue;
             }
             // Only take it back if the cover still owns it; someone may have reassigned it again.
-            if (p.stillOpen() && e.getValue().equals(p.owner())
+            // A retry after the move already happened finds the person owning it again: that counts as back.
+            if (p.stillOpen() && req.person().equals(p.owner())) {
+                back.add(promiseId);
+            } else if (p.stillOpen() && e.getValue().equals(p.owner())
                     && reassign(req.tenant(), promiseId, req.person(), "handoff:" + req.handoffId() + ":back:" + promiseId)) {
                 back.add(promiseId);
             }

@@ -2,6 +2,7 @@ package dev.promisegraph.ingestion;
 
 import dev.promisegraph.domain.Ids;
 import dev.promisegraph.domain.Message;
+import dev.promisegraph.privacy.Redactor;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -62,7 +63,7 @@ public final class IngestionGateway {
                 return;
             }
             Buffer buffer = buffers.computeIfAbsent(message.channel(), c -> new Buffer(clock.instant()));
-            buffer.messages.add(message);
+            buffer.messages.add(Redactor.redact(message)); // nothing sensitive reaches workflow history
             full = buffer.messages.size() >= maxBatch;
         }
         if (full) {

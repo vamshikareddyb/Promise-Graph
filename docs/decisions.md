@@ -153,3 +153,37 @@ promise's new date.
 Ripple keeps each dependent's gap after its upstream promise. After an earlier slip that gap can
 be negative (the upstream was already later than the dependent), which gave dates before the
 upstream finished. The gap now has a floor of zero.
+
+## 23. Failures end up in front of a person, not in a log
+
+A batch the model can't read after its retries becomes a dead letter holding its messages, which
+an operator can retry under the same workflow ID (so the messages are still its own to claim).
+An hourly `ReconcileWorkflow` checks that every open promise has a running workflow; one that
+failed, was terminated or never started is restarted from the stored promise, and one that
+finished while the store still shows it open is reported rather than guessed at.
+
+## 24. Idempotency is tested, not just designed
+
+`IdempotencyTest` runs every activity with a side effect twice and compares everything a person
+could see. The audit found one real bug: a retried hand-back reported an already-returned promise
+as closed. docs/idempotency.md lists every activity and why a repeat is safe.
+
+## 25. Sensitive details are removed before they enter a workflow
+
+Workflow inputs and activity results live in Temporal's history, so redaction happens at the two
+entry points (the webhook gateway and the Gmail fetch), not later. Email addresses keep their
+domain because it can show a message is about a customer.
+
+## 26. Visibility is decided on the server, by relationship
+
+A person sees promises they own or were made to them, ones linked to theirs, their team's if they
+lead it, ones in a negotiation they approve, and ones they handed over while away. Teammates don't
+see each other's promises by default, which is what lets someone covering see only what was
+handed to them. Quotes from messages are shown only to the owner and the person promised. Until
+sign-in exists the viewer comes from a header, so the server stays on localhost.
+
+## 27. Metrics go through Micrometer, including Temporal's
+
+The app's counters and gauges and the Temporal SDK's metrics share one Prometheus endpoint on a
+separate management port. The dashboard and alert rules live in `ops/` and start with
+`docker compose --profile observability up -d`. Tracing is not set up yet.

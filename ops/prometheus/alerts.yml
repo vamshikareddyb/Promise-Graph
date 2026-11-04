@@ -1,0 +1,43 @@
+groups:
+  - name: promise-graph
+    rules:
+      - alert: PromiseGraphDown
+        expr: up{job="promise-graph"} == 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "The Promise Graph worker has not been reachable for 5 minutes; no reminders or ripples are running."
+
+      - alert: DeadLettersWaiting
+        expr: max(promisegraph_dead_letters_open) > 0
+        for: 30m
+        labels: {severity: ticket}
+        annotations:
+          summary: "{{ $value }} dead letters have waited 30 minutes. Retry or dismiss them on the Ops page."
+
+      - alert: WorkflowsRestartedBySweep
+        expr: increase(promisegraph_reconcile_restarted_total[1h]) > 0
+        labels: {severity: ticket}
+        annotations:
+          summary: "The sweep restarted {{ $value }} promise workflows in the last hour. Look for the cause in the Temporal UI."
+
+      - alert: WorkflowTaskFailures
+        expr: sum(rate(temporal_workflow_task_execution_failed_total[10m])) > 0
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "Workflow tasks keep failing, often a determinism error after a deploy. Run the replay tests against recent histories."
+
+      - alert: ActivityFailuresHigh
+        expr: sum by (activity_type) (rate(temporal_activity_execution_failed_total[15m])) > 0.1
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Activity {{ $labels.activity_type }} is failing often (it will keep retrying)."
+
+      - alert: TasksWaitingForWorkers
+        expr: max(temporal_activity_schedule_to_start_latency_seconds_max) > 60
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Activities wait more than a minute for a worker. Add workers or raise their concurrency."
