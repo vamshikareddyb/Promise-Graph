@@ -41,9 +41,9 @@ system never stalls on a model.
 - **Safe to change.** Behaviour added to running workflows is versioned, and CI replays recorded
   histories against the current code (docs/versioning.md).
 - **Tested under failure.** Hundreds of promises with storage writes failing after they succeed,
-  and the worker killed mid-run: every promise ends in the right state, every version is recorded
+  and the worker going down mid-run: every promise ends in the right state, every version is recorded
   once, every notification is sent once. `./gradlew loadTest` runs the same check against a real
-  Temporal server at any size, for example 50,000 promises.
+  Temporal server at any size, for example 50,000 promises; that larger run hasn't been done yet.
 - **Observable.** Prometheus metrics from the app and the Temporal SDK, a Grafana dashboard and
   alert rules (`ops/`).
 - **Private by default.** Contact details, card numbers and secrets are removed from messages

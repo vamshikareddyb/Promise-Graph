@@ -29,8 +29,8 @@ workflow type, needs no versioning.
    missed and handed over, a ripple, an applied negotiation, a team workflow, a handoff, a digest
    and a sweep) and replays each history straight away. That catches non-determinism within the
    current code.
-2. It replays every history in `src/test/resources/histories/`. These were recorded from earlier
-   versions; if one stops replaying, the change needs `getVersion`.
+2. It replays every history in `src/test/resources/histories/`. The `phase3-*` files were recorded
+   from the Phase 3 code; if one stops replaying, the change needs `getVersion`.
 
 To add histories from the current version, run the tests with `PG_RECORD_HISTORIES=1`. Each
 history is printed as `HISTORY <name> <gzip+base64>`; decode it with `ReplayTest.gunzip` and save

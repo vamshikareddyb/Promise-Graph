@@ -164,6 +164,7 @@ class ReplayTest {
     @Test
     void historiesFromEarlierVersionsStillReplay() throws Exception {
         List<Path> files = recorded();
+        assertThat(files).as("recorded histories in src/test/resources/histories").hasSizeGreaterThanOrEqualTo(9);
         for (Path f : files) {
             String json = Files.readString(f, StandardCharsets.UTF_8);
             try {

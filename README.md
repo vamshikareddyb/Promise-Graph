@@ -144,8 +144,9 @@ the newer migrations applied once, in order, for example:
 
 CI (`.github/workflows/ci.yml`) runs `./gradlew check` on every push and pull request. Besides
 unit and workflow tests it runs the idempotency audit (every activity twice), load and failure
-tests (300 promises with storage failing after writes; the worker killed mid-run), and replay
-tests (see [docs/versioning.md](docs/versioning.md)). The Postgres tests need Docker and are
+tests (300 promises with storage failing after writes; 120 promises with the worker down mid-run
+and every workflow rebuilt from its history), and replay tests, including histories recorded from
+the Phase 3 code (see [docs/versioning.md](docs/versioning.md)). The Postgres tests need Docker and are
 skipped without it.
 
 ## Progress
@@ -180,7 +181,8 @@ skipped without it.
 - The web app has no sign-in. Visibility rules are enforced on the server, but the viewer is
   whoever the browser says, so it listens on localhost only; add authentication before exposing it.
 - CI's load test runs 300 promises on the test server. 50,000 against a real server is what
-  `./gradlew loadTest` is for; it has not been run as part of CI.
+  `./gradlew loadTest` is for; it has not been run yet. On the test server the worker going down is
+  modelled by pausing it and rebuilding every workflow from history; `loadTest -PkillAt` stops a real one.
 - Metrics and alerts are in place; distributed tracing is not.
 - Times use UTC working hours (09:30 India time). Per-person time zones come later.
 
