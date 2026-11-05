@@ -37,7 +37,7 @@
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
-  .s-completed, .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied, .s-auto_fixed, .s-retried { color: var(--good); }
+  .s-assigned, .s-completed, .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied, .s-auto_fixed, .s-retried { color: var(--good); }
   .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled, .s-awaiting_approval, .s-applying { color: var(--warn); }
   .s-broken, .s-rejected, .s-uncovered, .s-cancelled, .s-failed, .s-unresolved { color: var(--bad); }
   .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over, .s-expired, .s-superseded, .s-dismissed { color: var(--muted); }
@@ -274,7 +274,7 @@ async function renderHandoffs() {
   const hs = await api('/handoffs');
   const peopleOpt = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
   const item = (h, i) => `<tr><td>${esc(i.what)}${i.due ? `<div class="meta">due ${esc(i.due)}</div>` : ''}</td>
-      <td>${esc(name(i.acceptedOwner || i.proposedOwner || '—'))}</td><td>${pill(i.state)}</td>
+      <td>${esc(name(i.acceptedOwner || i.proposedOwner || '—'))}</td><td>${pill({ proposed: 'suggested', accepted: 'assigned' }[i.state] || i.state)}</td>
       <td>${['needs_owner', 'proposed', 'uncovered'].includes(i.state) && !['returned', 'cancelled'].includes(h.status)
         ? `<select data-h="${esc(h.id)}" data-p="${esc(i.promiseId)}"><option value="">Assign to…</option>${peopleOpt}</select>` : ''}</td></tr>`;
   $view.innerHTML = `
@@ -289,7 +289,7 @@ async function renderHandoffs() {
       <div><b>${mine ? (h.endsOn ? 'Your leave' : 'You are leaving') : esc(name(h.person))}</b>
         ${h.endsOn ? (mine ? '' : 'away ') + esc(h.startsOn) + ' to ' + esc(h.endsOn) : (mine ? 'from ' : 'leaving the company (from ') + esc(h.startsOn) + (mine ? ', for good' : ', for good)')} ${pill(h.status)}
         ${h.planner ? `<span class="meta"> · planned by ${esc(h.planner)}</span>` : ''}</div>
-      ${h.items.length ? `<table style="margin-top:10px"><thead><tr><th>Promise</th><th>Cover</th><th>State</th><th></th></tr></thead>
+      ${h.items.length ? `<table style="margin-top:10px"><thead><tr><th>Promise</th><th>Goes to</th><th>State</th><th></th></tr></thead>
         <tbody>${h.items.map(i => item(h, i)).join('')}</tbody></table>`
         : `<div class="meta">${mine && h.status === 'scheduled'
           ? `You have no open promises right now, so there's nothing to hand over. Promises you make before you go get cover on ${esc(planDay(h.startsOn))}${h.endsOn ? ', and come back to you the day after you return' : ''}.`
