@@ -44,6 +44,11 @@ promisegraph:
     team-checks: ${PG_NEGOTIATION_TEAM_CHECKS:true}
   privacy:
     admins: ${PG_ADMINS:}   # comma-separated ids allowed on the operations page besides team leads
+  auth:
+    mode: ${PG_AUTH:none}   # none | google (team mode: everyone signs in with Google)
+    redirect-uri: ${PG_AUTH_REDIRECT_URI:http://localhost:8787/login/callback}
+    secret-key: ${PG_SECRET_KEY:}
+    secret-key-file: ${PG_SECRET_KEY_FILE:${user.home}/.promise-graph/secret.key}
   gmail:
     enabled: ${PG_GMAIL_ENABLED:false}
     credentials-file: ${PG_GMAIL_CREDENTIALS:${user.home}/.promise-graph/gmail-credentials.json}
@@ -53,7 +58,12 @@ promisegraph:
 
 server:
   port: ${PORT:8787}
-  # The web app has no login yet, so it only listens on this computer.
+  servlet:
+    session:
+      cookie:
+        same-site: lax   # team mode signs in with a session cookie; Lax keeps other sites from using it
+        http-only: true
+  # Only this computer can reach the app (team mode adds Google sign-in; use a reverse proxy with HTTPS to share it).
   address: ${SERVER_ADDRESS:127.0.0.1}
 
 logging:

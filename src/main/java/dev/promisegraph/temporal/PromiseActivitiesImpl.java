@@ -112,15 +112,22 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
         return new ClaimResult(kept, absences);
     }
 
-    /** Gives requests ("you need to…") to the mailbox owner, or drops them if there isn't one or they wrote it. */
+    /**
+     * Fills in whose mailbox an email came from. Requests ("you need to…") become that person's
+     * promises, or are dropped when there is no mailbox owner or they wrote it themselves. A
+     * promise someone else made in an email to that person records them as its recipient.
+     */
     List<Commitment> assignRequests(List<Commitment> commitments) {
         List<Commitment> out = new ArrayList<>();
         for (Commitment c : commitments) {
+            Optional<String> me = Requests.mailboxOf(c.channel()).or(mailboxOwner);
             if (!Requests.ADDRESSEE.equals(c.owner())) {
-                out.add(c);
+                boolean toMe = c.kind() == CommitmentKind.NEW && c.recipient() == null && me.isPresent()
+                        && !me.get().equalsIgnoreCase(c.owner()) && Requests.mailboxOf(c.channel()).isPresent();
+                out.add(toMe ? new Commitment(c.kind(), c.messageId(), c.owner(), c.what(), c.quote(), c.confidence(), c.channel(),
+                        me.get(), c.due(), c.shiftDays()) : c);
                 continue;
             }
-            Optional<String> me = mailboxOwner.get();
             if (me.isEmpty() || me.get().equalsIgnoreCase(c.recipient())) {
                 log.info("dropped request in {}: no mailbox owner, or one they sent themselves", c.messageId());
                 continue;

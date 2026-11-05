@@ -33,6 +33,9 @@ import org.slf4j.Logger;
 /** Deterministic code only; every side effect is an activity. */
 public class HandoffWorkflowImpl implements HandoffWorkflow {
 
+    /** Departures wait for the lead to approve the plan; handoffs recorded before this replay without it. */
+    static final String DEPARTURE_APPROVAL = "departure-approval";
+
     /** Handoff moments happen at 09:30 India time (04:00 UTC), like reminders. */
     static final LocalTime HANDOFF_TIME_UTC = LocalTime.of(4, 0);
 
@@ -56,6 +59,8 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
     private String planner;
     private boolean cancelled;
     private boolean live; // after the absence starts, an accepted promise moves at once
+    private boolean departure; // leaving for good: the lead approves first, and nothing comes back
+    private boolean approved = true; // only a departure starts unapproved
 
     @Override
     public void respond(HandoffResponse response) {
@@ -80,7 +85,7 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         absence = request.absence();
         Instant startAt = at(absence.startsOn());
         Instant prepAt = startAt.minus(Duration.ofDays(request.prepDays()));
-        Instant reminderAt = startAt.minus(Duration.ofDays(1));
+        Instant reminderAt = startAt.minus(Duration.ofDays(1)); // may move later, so not final
         Instant returnAt = absence.endsOn() == null ? null : at(absence.endsOn()).plus(Duration.ofDays(1));
 
         state = new HandoffRecord(absence.tenant(), absence.handoffId(), absence.person(), absence.startsOn(),
@@ -109,15 +114,45 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             return state.status();
         }
 
+        // 1b. Someone leaving the company: their lead approves the plan before anyone is asked.
+        Instant transferAt = startAt;
+        departure = returnAt == null && Workflow.getVersion(DEPARTURE_APPROVAL, Workflow.DEFAULT_VERSION, 1) >= 1;
+        if (departure) {
+            approved = false;
+            save("awaiting_approval");
+            List<String> plan1 = new ArrayList<>();
+            for (ItemState i : items.values()) {
+                plan1.add(i.what() + " → " + (i.proposedOwner() == null ? "needs someone" : i.proposedOwner()));
+            }
+            notifyPlan(decider, absence.person() + " is leaving: their last day is " + lastDay() + ". " + items.size()
+                    + (items.size() == 1 ? " open promise needs" : " open promises need") + " a new owner: " + String.join("; ", plan1)
+                    + ". Approve this plan, or change who takes what on the Handoffs page first.", "approval");
+            boolean late = false;
+            while (!approved && !cancelled) {
+                waitUntil(late ? null : startAt);
+                if (!approved && !cancelled && !late) {
+                    late = true; // the last day has passed with nothing approved: say so once, then keep waiting
+                    notifyPlan(decider, absence.person() + " has left and their " + items.size()
+                            + " open promise(s) haven't moved yet. Approve the handover on the Handoffs page.", "late");
+                }
+            }
+            if (cancelled) {
+                return finishCancelled();
+            }
+            if (!now().isBefore(startAt)) {
+                transferAt = now().plus(Duration.ofDays(1)); // approved after the last day: give the new owners a day to answer
+            }
+        }
+
         // 2. Ask for cover, and tell the person leaving who was asked.
         save("awaiting_cover");
         List<String> lines = new ArrayList<>();
         for (ItemState i : items.values()) {
             lines.add(i.what() + " → " + (i.proposedOwner() == null ? "needs someone" : i.proposedOwner()));
         }
-        notify(absence.person(), "While you're away " + window() + ", " + items.size() + " promise"
-                + (items.size() == 1 ? " needs" : "s need") + " cover: " + String.join("; ", lines)
-                + ". You can change who covers what on the Handoffs page.", List.of(), null, "plan");
+        notify(absence.person(), (departure ? "After you leave, " : "While you're away " + window() + ", ") + items.size() + " promise"
+                + (items.size() == 1 ? " needs" : "s need") + (departure ? " a new owner: " : " cover: ") + String.join("; ", lines)
+                + ". You can change who takes what on the Handoffs page.", List.of(), null, "plan");
         for (ItemState i : List.copyOf(items.values())) {
             if (i.proposedOwner() != null) {
                 askCover(i, "ask");
@@ -127,6 +162,9 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         }
 
         // 3. Collect answers until the absence starts, with one reminder the day before.
+        if (!transferAt.equals(startAt)) {
+            reminderAt = transferAt; // approved late: no separate reminder
+        }
         if (now().isBefore(reminderAt)) {
             waitUntil(reminderAt);
             if (!cancelled) {
@@ -139,7 +177,7 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                 }
             }
         }
-        waitUntil(startAt);
+        waitUntil(transferAt);
         if (cancelled) {
             return finishCancelled();
         }
@@ -161,7 +199,7 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             }
         }
         live = true;
-        save("active");
+        save(departure ? "handed_over" : "active");
 
         if (returnAt == null) {
             return state.status(); // a permanent exit: the new owners keep the promises
@@ -182,12 +220,20 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         return state.status();
     }
 
-    /** Waits until {@code until}, handling answers as they arrive. Stops early on cancel. */
+    /**
+     * Waits until {@code until}, handling answers as they arrive. Stops early on cancel, and, while a
+     * departure awaits approval, once it is approved. {@code null} means no deadline.
+     */
     private void waitUntil(Instant until) {
         while (!cancelled) {
+            boolean waitingForApproval = !approved;
             processResponses();
-            if (cancelled) {
+            if (cancelled || (waitingForApproval && approved)) {
                 return;
+            }
+            if (until == null) {
+                Workflow.await(() -> !responses.isEmpty() || cancelled);
+                continue;
             }
             Duration left = Duration.between(now(), until);
             if (left.isNegative() || left.isZero()) {
@@ -206,6 +252,14 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             }
             if ("cancel".equals(r.kind())) {
                 cancelled = true;
+                continue;
+            }
+            if ("approve plan".equals(r.kind())) {
+                if (!approved && r.by() != null && r.by().equals(decider)) {
+                    approved = true;
+                    notify(absence.person(), r.by() + " approved the handover of your open promises.", List.of(), null, "approved");
+                    changed = true;
+                }
                 continue;
             }
             ItemState i = items.get(r.promiseId());
@@ -238,7 +292,9 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                     if (open && r.owner() != null && !r.owner().isBlank() && !r.owner().equals(absence.person())) {
                         ItemState next = i.withProposal(r.owner(), "chosen by " + r.by());
                         items.put(i.promiseId(), next);
-                        askCover(next, "assign-" + r.sourceId());
+                        if (approved) {
+                            askCover(next, "assign-" + r.sourceId()); // before approval, only the plan changes
+                        }
                         changed = true;
                     }
                 }
@@ -264,10 +320,26 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         return absence.endsOn() == null ? "from " + absence.startsOn() : "from " + absence.startsOn() + " to " + absence.endsOn();
     }
 
+    /** For a departure, the person's last day (the day before the absence starts). */
+    private String lastDay() {
+        return LocalDate.parse(absence.startsOn()).minusDays(1).toString();
+    }
+
     private void askCover(ItemState i, String why) {
         String due = i.due() == null ? "" : " (due " + i.due() + ")";
-        notify(i.proposedOwner(), "Can you cover \"" + i.what() + "\"" + due + " for " + absence.person() + " while they're away "
-                + window() + "? " + i.brief(), List.of("accept", "decline"), i.promiseId(), why, i.promiseId(), i.proposedOwner());
+        String ask = departure
+                ? "Can you take over \"" + i.what() + "\"" + due + " from " + absence.person() + ", who is leaving (last day "
+                        + lastDay() + ")? It becomes your promise for good. "
+                : "Can you cover \"" + i.what() + "\"" + due + " for " + absence.person() + " while they're away " + window()
+                        + "? It comes back to them afterwards. ";
+        notify(i.proposedOwner(), ask + i.brief(), List.of("accept", "decline"), i.promiseId(), why, i.promiseId(), i.proposedOwner());
+    }
+
+    /** The plan-approval request: its subject routes the inbox button to this workflow. */
+    private void notifyPlan(String recipient, String text, String why) {
+        List<String> parts = List.of(absence.tenant(), "handoff", absence.handoffId(), recipient, "plan", why);
+        io.sendNotification(new Notification(absence.tenant(), recipient, text, Ids.notificationKey(parts.toArray(String[]::new)),
+                List.of("approve plan"), null, "handoff:" + absence.handoffId() + ":plan"));
     }
 
     private void escalate(ItemState i, String why) {

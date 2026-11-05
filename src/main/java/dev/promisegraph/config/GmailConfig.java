@@ -3,10 +3,14 @@ package dev.promisegraph.config;
 import dev.promisegraph.gmail.GmailActivitiesImpl;
 import dev.promisegraph.gmail.GmailApi;
 import dev.promisegraph.gmail.GmailRestApi;
+import dev.promisegraph.gmail.GmailSyncContracts;
 import dev.promisegraph.gmail.GmailSyncContracts.SyncState;
 import dev.promisegraph.gmail.GmailSyncWorkflow;
 import dev.promisegraph.gmail.GoogleOAuth;
 import dev.promisegraph.gmail.MailboxOwner;
+import dev.promisegraph.team.SecretBox;
+import dev.promisegraph.team.TeamMailboxes;
+import dev.promisegraph.team.TeamStore;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowExecutionAlreadyStarted;
 import io.temporal.client.WorkflowOptions;
@@ -14,52 +18,87 @@ import java.io.IOException;
 import java.nio.file.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Gmail reading, switched on with {@code promisegraph.gmail.enabled=true} (env {@code PG_GMAIL_ENABLED}). */
+/**
+ * Gmail reading. Two setups:
+ *
+ * <ul>
+ *   <li>Personal ({@code PG_GMAIL_ENABLED=true}): one mailbox, signed in with {@code gradlew gmailAuth}.
+ *   <li>Team ({@code PG_AUTH=google}): everyone who signs in to the web app has their own mailbox read.
+ * </ul>
+ */
 @Configuration
-@ConditionalOnProperty(prefix = "promisegraph.gmail", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("${promisegraph.gmail.enabled:false} or '${promisegraph.auth.mode:none}' == 'google'")
 public class GmailConfig {
 
     private static final Logger log = LoggerFactory.getLogger(GmailConfig.class);
 
     @Bean
-    GmailApi gmailApi(GmailProperties gmail) throws IOException {
-        var secrets = GoogleOAuth.ClientSecrets.load(Path.of(gmail.credentialsFile()));
+    GoogleOAuth.ClientSecrets googleClient(GmailProperties gmail) throws IOException {
+        return GoogleOAuth.ClientSecrets.load(Path.of(gmail.credentialsFile()));
+    }
+
+    // ------------------------------------------------------------ personal: one mailbox
+
+    @Bean
+    @ConditionalOnExpression("'${promisegraph.auth.mode:none}' != 'google'")
+    GmailApi gmailApi(GoogleOAuth.ClientSecrets secrets, GmailProperties gmail) {
         return new GmailRestApi(new GoogleOAuth(secrets, Path.of(gmail.tokenFile())));
     }
 
-    /** With Gmail connected, the app is personal: its one user is the connected account. */
+    /** With one Gmail connected, the app is personal: its one user is the connected account. */
     @Bean
+    @ConditionalOnExpression("'${promisegraph.auth.mode:none}' != 'google'")
     MailboxOwner mailboxOwner(GmailApi api) {
         return new MailboxOwner(() -> api.profile().emailAddress());
     }
 
+    // ------------------------------------------------------------ team: a mailbox per person
+
     @Bean
-    GmailActivitiesImpl gmailActivities(GmailApi api) {
-        return new GmailActivitiesImpl(api);
+    @ConditionalOnProperty(prefix = "promisegraph.auth", name = "mode", havingValue = "google")
+    TeamMailboxes teamMailboxes(GoogleOAuth.ClientSecrets secrets, TeamStore store, SecretBox box, PromiseGraphProperties props) {
+        return new TeamMailboxes(props.tenant(), secrets, store, box);
     }
 
-    /** Starts the mailbox sync once; if it is already running, it simply carries on from its cursor. */
     @Bean
-    ApplicationRunner startGmailSync(WorkflowClient client, GmailProperties gmail, PromiseGraphProperties props) {
+    GmailActivitiesImpl gmailActivities(ObjectProvider<GmailApi> personal, ObjectProvider<TeamMailboxes> team) {
+        return new GmailActivitiesImpl(mailbox -> mailbox == null ? personal.getObject() : team.getObject().forMailbox(mailbox));
+    }
+
+    /** Starts the sync for a mailbox; if it is already running, it carries on from its cursor. */
+    public static void startSync(WorkflowClient client, GmailProperties gmail, String tenant, String mailbox) {
+        GmailSyncWorkflow wf = client.newWorkflowStub(GmailSyncWorkflow.class, WorkflowOptions.newBuilder()
+                .setWorkflowId(GmailSyncContracts.workflowId(tenant, mailbox))
+                .setTaskQueue(PromiseGraphProperties.TASK_QUEUE_MAIN)
+                .build());
+        int poll = (int) gmail.pollInterval().toSeconds();
+        try {
+            WorkflowClient.start(wf::run, mailbox == null ? SyncState.personal(tenant, poll, gmail.backfillDays())
+                    : SyncState.forAccount(tenant, mailbox, poll, gmail.backfillDays()));
+            log.info("Gmail sync started{}", mailbox == null ? "" : " for " + mailbox);
+        } catch (WorkflowExecutionAlreadyStarted e) {
+            log.info("Gmail sync already running{}", mailbox == null ? "" : " for " + mailbox);
+        }
+    }
+
+    @Bean
+    ApplicationRunner startGmailSync(WorkflowClient client, GmailProperties gmail, PromiseGraphProperties props, AuthProperties auth,
+            ObjectProvider<TeamStore> team) {
         return args -> {
             if (!props.temporal().workerEnabled()) {
                 return;
             }
-            GmailSyncWorkflow wf = client.newWorkflowStub(GmailSyncWorkflow.class, WorkflowOptions.newBuilder()
-                    .setWorkflowId("gmail-sync-" + props.tenant())
-                    .setTaskQueue(PromiseGraphProperties.TASK_QUEUE_MAIN)
-                    .build());
-            try {
-                WorkflowClient.start(wf::run, new SyncState(props.tenant(), null,
-                        (int) gmail.pollInterval().toSeconds(), gmail.backfillDays(), 0));
-                log.info("Gmail sync started");
-            } catch (WorkflowExecutionAlreadyStarted e) {
-                log.info("Gmail sync already running");
+            if (auth.team()) {
+                team.getObject().accounts(props.tenant()).forEach(m -> startSync(client, gmail, props.tenant(), m));
+            } else {
+                startSync(client, gmail, props.tenant(), null);
             }
         };
     }

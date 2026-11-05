@@ -2,6 +2,7 @@ package dev.promisegraph.privacy;
 
 import dev.promisegraph.domain.Person;
 import dev.promisegraph.domain.Promise;
+import dev.promisegraph.extraction.Requests;
 import dev.promisegraph.handoff.Directory;
 import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.links.Link;
@@ -13,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -27,6 +29,9 @@ public final class Visibility {
     private final Directory directory;
     private final Set<String> admins;
     private final Supplier<Optional<String>> mailboxOwner;
+    /** Team mode: people see only their own promises, leads included; admins come from {@link #isAdmin}. */
+    private final boolean strict;
+    private final Predicate<String> isAdmin;
 
     /** @param admins people who may use the operations pages besides team leads (e.g. the owner of a personal setup) */
     public Visibility(Directory directory, Collection<String> admins) {
@@ -41,6 +46,33 @@ public final class Visibility {
         this.directory = directory;
         this.admins = Set.copyOf(admins);
         this.mailboxOwner = mailboxOwner;
+        this.strict = false;
+        this.isAdmin = a -> false;
+    }
+
+    private Visibility(Directory directory, Predicate<String> isAdmin) {
+        this.directory = directory;
+        this.admins = Set.of();
+        this.mailboxOwner = Optional::empty;
+        this.strict = true;
+        this.isAdmin = isAdmin;
+    }
+
+    /**
+     * Team mode: everyone signs in, and each person sees only promises they own, promises made to
+     * them, and promises found in their own mailbox. Leads don't see their team's promises; they
+     * see a handover or a recovery plan only when they have to approve it.
+     */
+    public static Visibility team(Directory directory, Predicate<String> isAdmin) {
+        return new Visibility(directory, isAdmin);
+    }
+
+    /** In team mode: is this promise the viewer's own, made to them, or read from their mailbox? */
+    private static boolean mine(String viewer, Promise p) {
+        if (viewer.equalsIgnoreCase(p.owner()) || viewer.equalsIgnoreCase(p.recipient())) {
+            return true;
+        }
+        return p.evidence().stream().anyMatch(e -> Requests.mailboxOf(e.channel()).map(viewer::equalsIgnoreCase).orElse(false));
     }
 
     /** The connected Gmail account, in a personal setup. */
@@ -54,6 +86,9 @@ public final class Visibility {
 
     /** Leads and admins may see operations pages and the audit log. */
     public boolean canOperate(String viewer) {
+        if (strict) {
+            return isAdmin.test(viewer);
+        }
         return ownsMailbox(viewer) || admins.contains(viewer) || directory.person(viewer).map(Person::lead).orElse(false);
     }
 
@@ -63,6 +98,10 @@ public final class Visibility {
         Set<String> out = new HashSet<>();
         if (ownsMailbox(viewer)) {
             promises.forEach(p -> out.add(p.id()));
+            return out;
+        }
+        if (strict) {
+            promises.stream().filter(p -> mine(viewer, p)).forEach(p -> out.add(p.id()));
             return out;
         }
         Set<String> own = new HashSet<>();
@@ -102,6 +141,9 @@ public final class Visibility {
     }
 
     public boolean canSeeQuotes(String viewer, Promise p) {
+        if (strict) {
+            return mine(viewer, p);
+        }
         return ownsMailbox(viewer) || viewer.equals(p.owner()) || viewer.equals(p.recipient());
     }
 

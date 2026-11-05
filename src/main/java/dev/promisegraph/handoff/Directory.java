@@ -5,26 +5,42 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
-/** Who works with whom. Phase 2 uses the simulated company; a directory sync replaces it later. */
+/**
+ * Who works with whom: the simulated company in the demo, or the People page in team mode, read
+ * fresh on every use so an admin's edits apply at once.
+ */
 public final class Directory {
 
-    private final Map<String, Person> byId = new LinkedHashMap<>();
+    private final Supplier<List<Person>> source;
 
     public Directory(List<Person> people) {
-        people.forEach(p -> byId.put(p.id(), p));
+        List<Person> fixed = List.copyOf(people);
+        this.source = () -> fixed;
+    }
+
+    public Directory(Supplier<List<Person>> source) {
+        this.source = source;
+    }
+
+    private Map<String, Person> byId() {
+        Map<String, Person> byId = new LinkedHashMap<>();
+        source.get().forEach(p -> byId.put(p.id(), p));
+        return byId;
     }
 
     public Optional<Person> person(String id) {
-        return Optional.ofNullable(byId.get(id));
+        return Optional.ofNullable(byId().get(id));
     }
 
     public List<Person> people() {
-        return List.copyOf(byId.values());
+        return List.copyOf(byId().values());
     }
 
     /** Everyone else in the same team; empty for people outside the directory, such as email contacts. */
     public List<Person> teammates(String id) {
+        Map<String, Person> byId = byId();
         Person p = byId.get(id);
         if (p == null) {
             return List.of();
@@ -34,6 +50,7 @@ public final class Directory {
 
     /** The lead of this person's team; for a lead, the lead themselves. */
     public Optional<String> leadOf(String id) {
+        Map<String, Person> byId = byId();
         Person p = byId.get(id);
         if (p == null) {
             return Optional.empty();

@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,23 +22,29 @@ public final class GmailActivitiesImpl implements GmailActivities {
 
     private static final Logger log = LoggerFactory.getLogger(GmailActivitiesImpl.class);
 
-    private final GmailApi gmail;
+    /** Finds the Gmail client for a mailbox; null means the single personal mailbox. */
+    private final Function<String, GmailApi> mailboxes;
 
     public GmailActivitiesImpl(GmailApi gmail) {
-        this.gmail = gmail;
+        this(mailbox -> gmail);
+    }
+
+    public GmailActivitiesImpl(Function<String, GmailApi> mailboxes) {
+        this.mailboxes = mailboxes;
     }
 
     @Override
     public FetchResult fetchNewEmails(FetchRequest req) {
+        GmailApi gmail = mailboxes.apply(req.mailbox());
         try {
             if (req.historyId() == null) {
-                return backfill(req, false);
+                return backfill(gmail, req, false);
             }
             try {
-                return incremental(req);
+                return incremental(gmail, req);
             } catch (HistoryExpiredException e) {
                 log.warn("Gmail history cursor expired; resyncing the last {} day(s)", req.backfillDays());
-                return backfill(req, true);
+                return backfill(gmail, req, true);
             }
         } catch (GmailApiException e) {
             if (e.retryable()) {
@@ -48,7 +55,7 @@ public final class GmailActivitiesImpl implements GmailActivities {
     }
 
     /** First run, or after the cursor expired: recent mail, then start the cursor from now. */
-    private FetchResult backfill(FetchRequest req, boolean resynced) {
+    private FetchResult backfill(GmailApi gmail, FetchRequest req, boolean resynced) {
         String startCursor = gmail.profile().historyId(); // taken first, so nothing arriving meanwhile is missed
         List<String> ids = new ArrayList<>();
         String pageToken = null;
@@ -58,11 +65,11 @@ public final class GmailActivitiesImpl implements GmailActivities {
             pageToken = page.nextPageToken();
         } while (pageToken != null && ids.size() < req.maxMessages());
         List<String> capped = ids.subList(0, Math.min(ids.size(), req.maxMessages()));
-        return convert(req.tenant(), capped.reversed(), startCursor, false, resynced); // oldest first
+        return convert(gmail, req, capped.reversed(), startCursor, false, resynced); // oldest first
     }
 
     /** Messages added since the cursor, cut at a history-record boundary so none is skipped. */
-    private FetchResult incremental(FetchRequest req) {
+    private FetchResult incremental(GmailApi gmail, FetchRequest req) {
         Set<String> ids = new LinkedHashSet<>();
         String cursor = req.historyId();
         String pageToken = null;
@@ -83,16 +90,16 @@ public final class GmailActivitiesImpl implements GmailActivities {
                 cursor = page.historyId(); // everything read: jump to the mailbox's latest cursor
             }
         } while (pageToken != null);
-        return convert(req.tenant(), new ArrayList<>(ids), cursor, hasMore, false);
+        return convert(gmail, req, new ArrayList<>(ids), cursor, hasMore, false);
     }
 
-    private FetchResult convert(String tenant, List<String> ids, String nextCursor, boolean hasMore, boolean resynced) {
+    private FetchResult convert(GmailApi gmail, FetchRequest req, List<String> ids, String nextCursor, boolean hasMore, boolean resynced) {
         List<Message> messages = new ArrayList<>();
         int skipped = 0;
         for (String id : ids) {
             Optional<Message> m;
             try {
-                m = GmailMapper.toMessage(gmail.getMessage(id), tenant);
+                m = GmailMapper.toMessage(gmail.getMessage(id), req.tenant(), req.mailbox());
             } catch (GmailApiException e) {
                 if (e.retryable()) {
                     throw e;
@@ -105,6 +112,10 @@ public final class GmailActivitiesImpl implements GmailActivities {
             } else {
                 skipped++;
             }
+        }
+        if (!ids.isEmpty()) {
+            log.info("Gmail{}: read {} email(s), {} passed on, {} skipped (promotions, lists, automated or empty)",
+                    req.mailbox() == null ? "" : " " + req.mailbox(), ids.size(), messages.size(), skipped);
         }
         return new FetchResult(messages, nextCursor, hasMore, skipped, resynced);
     }

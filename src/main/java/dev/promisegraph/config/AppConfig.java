@@ -7,6 +7,8 @@ import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.extraction.model.AnthropicExtractor;
 import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.handoff.Directory;
+import dev.promisegraph.team.Member;
+import dev.promisegraph.team.TeamStore;
 import dev.promisegraph.handoff.HandoffPlanning;
 import dev.promisegraph.handoff.HandoffScheduler;
 import dev.promisegraph.handoff.agent.AnthropicModelClient;
@@ -132,10 +134,14 @@ public class AppConfig {
         return TimingPolicy.defaults();
     }
 
-    /** Phase 2 uses the simulated company as its directory. A directory sync replaces this later. */
+    /** The demo uses the simulated company; team mode uses the People page (active people only). */
     @Bean
-    Directory directory() {
-        return new Directory(Company.PEOPLE);
+    Directory directory(AuthProperties auth, ObjectProvider<TeamStore> team, PromiseGraphProperties props) {
+        if (!auth.team()) {
+            return new Directory(Company.PEOPLE);
+        }
+        TeamStore store = team.getObject();
+        return new Directory(() -> store.members(props.tenant()).stream().filter(Member::active).map(Member::person).toList());
     }
 
     // ------------------------------------------------------------ handoffs and the inbox
@@ -151,7 +157,14 @@ public class AppConfig {
     }
 
     @Bean
-    Visibility visibility(Directory directory, PrivacyProperties privacy, ObjectProvider<MailboxOwner> mailbox) {
+    Visibility visibility(Directory directory, PrivacyProperties privacy, ObjectProvider<MailboxOwner> mailbox, AuthProperties auth,
+            ObjectProvider<TeamStore> team, PromiseGraphProperties props) {
+        if (auth.team()) {
+            TeamStore store = team.getObject();
+            // Team mode: each person sees only their own promises; admins come from the People page or PG_ADMINS.
+            return Visibility.team(directory, viewer -> privacy.admins().contains(viewer)
+                    || store.member(props.tenant(), viewer).map(Member::admin).orElse(false));
+        }
         return new Visibility(directory, privacy.admins(),
                 () -> Optional.ofNullable(mailbox.getIfAvailable()).flatMap(MailboxOwner::email));
     }

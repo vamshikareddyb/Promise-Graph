@@ -13,7 +13,9 @@ import java.util.regex.Pattern;
 
 /**
  * Finds the sender's own planned absences in a message: "I'm on leave from 16 Nov to 27 Nov",
- * "I'll be out until Friday", "OOO tomorrow". Questions and other people's absences are ignored.
+ * "I'll be out until Friday", "OOO tomorrow", and departures: "My last day is 20 Nov",
+ * "I'm leaving the company on Friday". Questions and other people's absences are ignored, and a
+ * departure needs a date.
  */
 public final class AbsenceDetector {
 
@@ -24,6 +26,14 @@ public final class AbsenceDetector {
             "\\bfrom (.+?)\\s+(?:to|until|till|through|thru|-|–)\\s+(.+?)(?:[.,;!?]|$)");
     private static final Pattern UNTIL = Pattern.compile("\\b(?:until|till|through|thru)\\s+(.+?)(?:[.,;!?]|$)");
     private static final Pattern NEXT_WEEK = Pattern.compile("\\bnext week\\b");
+    /** Leaving for good: "my last day is 20 Nov", "I'm leaving the company on Friday", "I've resigned". */
+    private static final Pattern DEPARTURE = Pattern.compile(
+            "\\b(my last (?:working )?day|last day (?:at|with|here|in the office)|"
+                    + "(?:i'm|i am|i'll be|i will be) leaving (?:the|this|my) (?:company|team|firm|organi[sz]ation|role|job)|"
+                    + "i've resigned|i have resigned|i'm resigning|i am resigning|"
+                    + "handed in my (?:notice|resignation)|serving (?:my )?notice|my notice period ends)\\b");
+    /** "Leaving early today" or "leaving for lunch" isn't leaving the company. */
+    private static final Pattern NOT_DEPARTURE = Pattern.compile("\\bleaving (?:early|for|now|soon for|the office|at \\d)");
 
     private AbsenceDetector() {}
 
@@ -31,7 +41,15 @@ public final class AbsenceDetector {
         LocalDate sent = m.timestamp().toLocalDate();
         for (String sentence : Detect.sentences(m.text())) {
             String s = sentence.toLowerCase(Locale.ROOT).replace('’', '\'');
-            if (sentence.stripTrailing().endsWith("?") || !AWAY.matcher(s).find() || !FIRST_PERSON.matcher(s).find()) {
+            if (sentence.stripTrailing().endsWith("?")) {
+                continue;
+            }
+            Optional<LocalDate> lastDay = lastDay(s, sent);
+            if (lastDay.isPresent()) {
+                // A permanent exit: from the day after the last day, with no end.
+                return Optional.of(new Absence(m.tenant(), m.sender(), lastDay.get().plusDays(1).toString(), null, DEPARTURE_REASON, m.id()));
+            }
+            if (!AWAY.matcher(s).find() || !FIRST_PERSON.matcher(s).find()) {
                 continue;
             }
             Optional<LocalDate[]> range = range(s, sent);
@@ -41,6 +59,17 @@ public final class AbsenceDetector {
             }
         }
         return Optional.empty();
+    }
+
+    /** The reason recorded for someone leaving the company. */
+    public static final String DEPARTURE_REASON = "departure";
+
+    /** The sender's own last day, when the sentence says they are leaving the company and names a date. */
+    static Optional<LocalDate> lastDay(String s, LocalDate sent) {
+        if (!DEPARTURE.matcher(s).find() || NOT_DEPARTURE.matcher(s).find()) {
+            return Optional.empty();
+        }
+        return DueDates.parseDue(s, sent).filter(d -> !d.isBefore(sent));
     }
 
     static Optional<LocalDate[]> range(String s, LocalDate sent) {
