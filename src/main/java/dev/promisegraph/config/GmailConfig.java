@@ -84,7 +84,20 @@ public class GmailConfig {
                     : SyncState.forAccount(tenant, mailbox, poll, gmail.backfillDays()));
             log.info("Gmail sync started{}", mailbox == null ? "" : " for " + mailbox);
         } catch (WorkflowExecutionAlreadyStarted e) {
-            log.info("Gmail sync already running{}", mailbox == null ? "" : " for " + mailbox);
+            // e.g. after signing in again: check now, which also ends a wait after access was refused
+            client.newWorkflowStub(GmailSyncWorkflow.class, GmailSyncContracts.workflowId(tenant, mailbox)).syncNow();
+            log.info("Gmail sync already running{}; asked it to check now", mailbox == null ? "" : " for " + mailbox);
+        }
+    }
+
+    /** Team mode reads each person's own mailbox; a sync left over from the personal setup has nothing to read. */
+    static void stopPersonalSync(WorkflowClient client, String tenant) {
+        try {
+            client.newUntypedWorkflowStub(GmailSyncContracts.workflowId(tenant, null))
+                    .terminate("team mode reads each signed-in person's own mailbox instead");
+            log.info("Stopped the personal Gmail sync; team mode reads each person's mailbox");
+        } catch (RuntimeException e) {
+            // not running: nothing to stop
         }
     }
 
@@ -96,6 +109,7 @@ public class GmailConfig {
                 return;
             }
             if (auth.team()) {
+                stopPersonalSync(client, props.tenant());
                 team.getObject().accounts(props.tenant()).forEach(m -> startSync(client, gmail, props.tenant(), m));
             } else {
                 startSync(client, gmail, props.tenant(), null);

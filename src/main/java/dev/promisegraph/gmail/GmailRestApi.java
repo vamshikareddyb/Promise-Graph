@@ -29,6 +29,16 @@ public final class GmailRestApi implements GmailApi {
         this.oauth = oauth;
     }
 
+    /** Google's own explanation, e.g. "Request had insufficient authentication scopes." */
+    static String reason(String body) {
+        try {
+            String message = MAPPER.readTree(body).path("error").path("message").asText("");
+            return message.isBlank() ? "" : ": " + message;
+        } catch (IOException | RuntimeException e) {
+            return "";
+        }
+    }
+
     private static String q(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
@@ -61,7 +71,7 @@ public final class GmailRestApi implements GmailApi {
                 throw new GmailApiException("Gmail returned " + status, true, null);
             }
             if (status >= 400) {
-                throw new GmailApiException("Gmail rejected the request (" + status + ")", false, null);
+                throw new GmailApiException("Gmail rejected the request (" + status + reason(response.body()) + ")", false, null);
             }
             try {
                 return MAPPER.readTree(response.body());

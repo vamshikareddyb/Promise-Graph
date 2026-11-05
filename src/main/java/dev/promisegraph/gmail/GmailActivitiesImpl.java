@@ -35,8 +35,8 @@ public final class GmailActivitiesImpl implements GmailActivities {
 
     @Override
     public FetchResult fetchNewEmails(FetchRequest req) {
-        GmailApi gmail = mailboxes.apply(req.mailbox());
         try {
+            GmailApi gmail = mailboxes.apply(req.mailbox());
             if (req.historyId() == null) {
                 return backfill(gmail, req, false);
             }
