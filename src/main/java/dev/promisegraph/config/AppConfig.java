@@ -162,8 +162,9 @@ public class AppConfig {
         }
         if ("claude".equals(drafts.writer())) {
             noKey("reply drafting");
+            return new TemplateReplyDrafter("ANTHROPIC_API_KEY is not set where the app was started");
         }
-        return new TemplateReplyDrafter();
+        return new TemplateReplyDrafter("PG_DRAFTS_WRITER is set to template");
     }
 
     @Bean

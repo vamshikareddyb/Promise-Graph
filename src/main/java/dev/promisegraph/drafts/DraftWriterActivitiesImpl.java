@@ -17,8 +17,13 @@ public final class DraftWriterActivitiesImpl implements DraftWriterActivities {
         try {
             return drafter.write(context);
         } catch (RuntimeException e) {
+            String why = String.valueOf(e.getMessage());
+            // A bad key or model name won't fix itself: give up at once rather than after every retry.
+            if (why.matches(".*returned 4(0[0-4]|1\\d|2[0-8]|[3-9]\\d).*")) {
+                throw ApplicationFailure.newNonRetryableFailureWithCause(why, "DraftModelRejected", e);
+            }
             // Retryable: the model is busy, or returned nothing usable this time.
-            throw ApplicationFailure.newFailureWithCause(String.valueOf(e.getMessage()), "DraftModelUnavailable", e);
+            throw ApplicationFailure.newFailureWithCause(why, "DraftModelUnavailable", e);
         }
     }
 }

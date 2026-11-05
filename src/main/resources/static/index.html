@@ -413,6 +413,9 @@ async function renderTeam() {
 const followUps = {};
 const hasUnsavedDraft = () => Object.values(followUps).some(f => f.edit !== undefined && f.draft && f.edit !== f.draft.body);
 
+const isTemplate = d => String(d.writtenBy || '').startsWith('template');
+const templateReason = d => String(d.writtenBy || '').replace(/^template:?\s*/, '') || 'Claude is not set up for drafts';
+
 function followUpPanel(id) {
   const f = followUps[id];
   if (f.error) return `<div class="err">${esc(f.error)}</div><div class="row"><button class="act" data-fu="close">Close</button></div>`;
@@ -420,7 +423,8 @@ function followUpPanel(id) {
   const d = f.draft;
   const text = f.edit ?? d.body;
   return `<div class="draft-head"><div><b>${esc(d.subject)}</b> <span class="meta">to ${esc(d.to || '—')}</span></div>
-      <span class="meta">${d.writtenBy === 'template' ? 'Plain template (Claude was not available)' : 'Drafted by Claude'} · ${when(d.updatedAt)}</span></div>
+      <span class="meta">${isTemplate(d) ? 'Plain template, not Claude' : 'Drafted by Claude'} · ${when(d.updatedAt)}</span></div>
+    ${isTemplate(d) ? `<div class="note">Claude didn't write this: ${esc(templateReason(d))}. Rewrite can't change a template; fix that and click Rewrite.</div>` : ''}
     <textarea aria-label="Follow-up draft">${esc(text)}</textarea>
     <div class="row">
       <button class="act primary" data-fu="copy">Copy</button>

@@ -51,9 +51,10 @@ public class DraftReplyWorkflowImpl implements DraftReplyWorkflow {
             written = writer.writeReply(ctx);
         } catch (ActivityFailure e) {
             // Claude stayed unavailable: still leave the person a starting point.
-            log.warn("draft for {} written without Claude: {}", ctx.sourceMessageId(),
-                    e.getCause() == null ? e.getMessage() : e.getCause().getMessage());
-            written = new Written(TemplateReplyDrafter.compose(ctx), TemplateReplyDrafter.BY);
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            String why = cause instanceof io.temporal.failure.ApplicationFailure af ? af.getOriginalMessage() : cause.getMessage();
+            log.warn("draft for {} written without Claude: {}", ctx.sourceMessageId(), why);
+            written = new Written(TemplateReplyDrafter.compose(ctx), TemplateReplyDrafter.by("Claude failed: " + why));
         }
         io.saveDraft(ReplyDraft.of(ctx, written, Instant.ofEpochMilli(Workflow.currentTimeMillis()).toString()), request.replace());
         return "drafted";
