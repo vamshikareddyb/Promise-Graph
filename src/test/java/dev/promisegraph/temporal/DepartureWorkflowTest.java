@@ -85,12 +85,13 @@ class DepartureWorkflowTest {
     void theLeadApprovesThenPromisesMoveForGood() {
         track("faq", "karan", "write the launch FAQ for support", 30);
         Absence leaving = new Absence("demo", "karan", inDays(5), null, AbsenceDetector.DEPARTURE_REASON, "test");
+        String lastDay = inDays(4);
         stack.scheduler.schedule(leaving);
 
         // Three days ahead: the plan goes to Karan's lead (Aditi) first. Nobody is asked yet.
         env.sleep(Duration.ofDays(3));
         assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_approval");
-        InboxItem approval = openItem("aditi", "karan is leaving: their last day is " + inDays(4));
+        InboxItem approval = openItem("aditi", "karan is leaving: their last day is " + lastDay);
         assertThat(approval.actions()).containsExactly("approve plan");
         assertThat(approval.text()).contains("write the launch FAQ for support → nikhil");
         assertThat(hasItem("nikhil", "take over")).isFalse();

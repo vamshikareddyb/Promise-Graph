@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -102,5 +103,15 @@ public class TeamController {
                 "team=" + updated.team() + " role=" + updated.role() + " lead=" + updated.lead() + " admin=" + updated.admin()
                         + " active=" + updated.active()));
         return updated;
+    }
+
+    @ExceptionHandler(InboxService.ActionException.class)
+    public ResponseEntity<Map<String, String>> actionError(InboxService.ActionException e) {
+        return ResponseEntity.status(e.status()).body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     }
 }
