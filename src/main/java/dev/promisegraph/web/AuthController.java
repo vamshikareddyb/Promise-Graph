@@ -96,6 +96,12 @@ public class AuthController {
             log.warn("Google sign-in failed: {}", e.getMessage());
             return page(HttpStatus.BAD_GATEWAY, "Google sign-in failed: " + e.getMessage());
         }
+        if (!signIn.canReadGmail()) {
+            log.warn("{} signed in without allowing Gmail access", signIn.email());
+            return page(HttpStatus.FORBIDDEN, "Promise Graph needs to read your Gmail to find your promises, but that permission wasn't "
+                    + "allowed. Sign in again and, on Google's screen, tick the box for \"View your email messages and settings\" "
+                    + "(or click \"Select all\").");
+        }
         String tenant = props.tenant();
         String email = signIn.email().toLowerCase(java.util.Locale.ROOT);
         String now = Instant.now().toString();

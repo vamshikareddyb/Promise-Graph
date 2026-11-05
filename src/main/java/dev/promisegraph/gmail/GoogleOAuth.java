@@ -46,8 +46,16 @@ public final class GoogleOAuth {
         }
     }
 
-    /** What the web sign-in learns: the account, and its refresh token for reading Gmail later. */
-    public record SignIn(String email, String name, String refreshToken) {}
+    /**
+     * What the web sign-in learns: the account, its refresh token for reading Gmail later, and the
+     * permissions granted. Google lets people untick individual permissions, so Gmail may be missing.
+     */
+    public record SignIn(String email, String name, String refreshToken, String scopes) {
+
+        public boolean canReadGmail() {
+            return scopes != null && java.util.Arrays.asList(scopes.split(" ")).contains(SCOPE);
+        }
+    }
 
     private final ClientSecrets secrets;
     private final Path tokenFile;
@@ -109,7 +117,8 @@ public final class GoogleOAuth {
             if (!info.path("email_verified").asBoolean(false)) {
                 throw new GmailApi.GmailApiException("that Google account's email address is not verified", false, null);
             }
-            return new SignIn(info.path("email").asText(), info.path("name").asText(null), tokens.path("refresh_token").asText(null));
+            return new SignIn(info.path("email").asText(), info.path("name").asText(null), tokens.path("refresh_token").asText(null),
+                    tokens.path("scope").asText(""));
         } catch (IOException e) {
             throw new GmailApi.GmailApiException("could not reach Google: " + e.getMessage(), true, e);
         } catch (InterruptedException e) {

@@ -17,10 +17,14 @@ public interface GmailSyncWorkflow {
     @WorkflowMethod
     void run(SyncState state);
 
-    /** Check for new mail now instead of waiting for the next poll (for a future Gmail push notification). */
+    /** Check for new mail now instead of waiting for the next poll (also sent when the person signs in again). */
     @SignalMethod
     void syncNow();
 
     @QueryMethod
     SyncState state();
+
+    /** Why the mailbox can't be read right now (e.g. access was refused), or null when all is well. */
+    @QueryMethod
+    String problem();
 }
