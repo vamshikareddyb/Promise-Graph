@@ -94,7 +94,13 @@ public final class AnthropicExtractor implements Extractor {
             throw new ModelRequestException("model API returned " + status, true, null);
         }
         if (status >= 400) {
-            throw new ModelRequestException("model API rejected the request: " + status, false, null);
+            String why = "";
+            try {
+                why = MAPPER.readTree(response.body()).path("error").path("message").asText("");
+            } catch (IOException | RuntimeException ignored) {
+                // not JSON: the status alone
+            }
+            throw new ModelRequestException("model API rejected the request: " + status + (why.isBlank() ? "" : " (" + why + ")"), false, null);
         }
 
         StringBuilder text = new StringBuilder();

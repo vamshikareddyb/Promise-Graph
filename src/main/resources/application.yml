@@ -45,9 +45,11 @@ promisegraph:
   # Claude is the model for every agent. Without ANTHROPIC_API_KEY each one falls back to its rules.
   drafts:
     auto: ${PG_DRAFTS_AUTO:false}            # true: also draft a reply to every email with a promise, unasked
-    writer: ${PG_DRAFTS_WRITER:claude}       # claude | template
+    writer: ${PG_DRAFTS_WRITER:claude}       # claude | ollama (free, on this computer) | template
     model: ${PG_DRAFTS_MODEL:}               # empty: same model as extraction
     max-tokens: ${PG_DRAFTS_MAX_TOKENS:1200}
+    ollama-url: ${PG_OLLAMA_URL:http://localhost:11434}
+    ollama-model: ${PG_OLLAMA_MODEL:llama3.2}
   privacy:
     admins: ${PG_ADMINS:}   # comma-separated ids allowed on the operations page besides team leads
   auth:

@@ -38,7 +38,14 @@ public final class AnthropicModelClient implements ModelClient {
         try {
             HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (res.statusCode() >= 400) {
-                throw new IllegalStateException("model API returned " + res.statusCode());
+                // Anthropic's own explanation, e.g. "invalid x-api-key" or "model: claude-x not found"
+                String why = "";
+                try {
+                    why = MAPPER.readTree(res.body()).path("error").path("message").asText("");
+                } catch (IOException | RuntimeException ignored) {
+                    // not JSON: the status alone
+                }
+                throw new IllegalStateException("Claude API returned " + res.statusCode() + (why.isBlank() ? "" : " (" + why + ")"));
             }
             return MAPPER.readTree(res.body());
         } catch (IOException e) {

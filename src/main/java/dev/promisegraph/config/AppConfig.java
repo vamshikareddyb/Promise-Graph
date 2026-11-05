@@ -6,9 +6,11 @@ import dev.promisegraph.drafts.ClaudeReplyDrafter;
 import dev.promisegraph.drafts.DraftStore;
 import dev.promisegraph.drafts.InMemoryDraftStore;
 import dev.promisegraph.drafts.JdbcDraftStore;
+import dev.promisegraph.drafts.OllamaReplyDrafter;
 import dev.promisegraph.drafts.ReplyDrafter;
 import dev.promisegraph.drafts.TemplateReplyDrafter;
 import dev.promisegraph.extraction.Extractor;
+import dev.promisegraph.extraction.FallbackExtractor;
 import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.extraction.model.AnthropicExtractor;
 import dev.promisegraph.gmail.MailboxOwner;
@@ -131,11 +133,49 @@ public class AppConfig {
      * agent falls back to its rule-based version and says so in the log.
      */
     static Optional<String> claudeKey(Environment env) {
-        return Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(String::strip).filter(k -> !k.isEmpty());
+        Optional<String> fromEnv = Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(AppConfig::cleanKey).filter(k -> !k.isEmpty());
+        if (fromEnv.isPresent()) {
+            logKeyOnce("the ANTHROPIC_API_KEY environment variable", fromEnv.get());
+            return fromEnv;
+        }
+        // Saved once, so it works however the app is started (any terminal, the IDE, a script).
+        java.nio.file.Path file = java.nio.file.Path.of(System.getProperty("user.home"), ".promise-graph", "anthropic-key.txt");
+        try {
+            if (java.nio.file.Files.isRegularFile(file)) {
+                Optional<String> key = Optional.of(cleanKey(java.nio.file.Files.readString(file))).filter(k -> !k.isEmpty());
+                key.ifPresent(k -> logKeyOnce(file.toString(), k));
+                return key;
+            }
+        } catch (java.io.IOException e) {
+            log.warn("could not read {}: {}", file, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /** Drops what copying a key tends to add: spaces, line breaks, a byte-order mark, surrounding quotes. */
+    static String cleanKey(String raw) {
+        String k = raw.replace("\uFEFF", "").strip();
+        if (k.length() >= 2 && (k.startsWith("\"") && k.endsWith("\"") || k.startsWith("'") && k.endsWith("'"))) {
+            k = k.substring(1, k.length() - 1).strip();
+        }
+        return k;
+    }
+
+    private static volatile boolean keyLogged;
+
+    /** Says once where the key came from and which key it is (never the whole key), to check against the console. */
+    private static void logKeyOnce(String source, String key) {
+        if (keyLogged) {
+            return;
+        }
+        keyLogged = true;
+        String shown = key.length() <= 14 ? "(" + key.length() + " characters)" : key.substring(0, 10) + "..." + key.substring(key.length() - 4);
+        log.info("Claude API key from {}: {}{}", source, shown,
+                key.startsWith("sk-ant-api") ? "" : " - this doesn't look like an API key; they start with sk-ant-api");
     }
 
     private static void noKey(String what) {
-        log.warn("ANTHROPIC_API_KEY is not set: {} uses the built-in rules instead of Claude", what);
+        log.warn("ANTHROPIC_API_KEY is not set (nor ~/.promise-graph/anthropic-key.txt): {} uses the built-in rules instead of Claude", what);
     }
 
     @Bean
@@ -144,7 +184,7 @@ public class AppConfig {
             Optional<String> key = claudeKey(env);
             if (key.isPresent()) {
                 log.info("promise extraction: Claude ({})", props.model());
-                return new AnthropicExtractor(key.get(), props.model(), 2000);
+                return new FallbackExtractor(new AnthropicExtractor(key.get(), props.model(), 2000), new RuleBasedExtractor());
             }
             noKey("promise extraction");
         }
@@ -154,6 +194,10 @@ public class AppConfig {
     /** The reply-draft agent: Claude writes the reply; without a key, a plain acknowledgement is drafted. */
     @Bean
     ReplyDrafter replyDrafter(DraftProperties drafts, PromiseGraphProperties props, Environment env) {
+        if ("ollama".equals(drafts.writer())) {
+            log.info("reply drafts: local model {} through Ollama at {}", drafts.ollamaModel(), drafts.ollamaUrl());
+            return new OllamaReplyDrafter(drafts.ollamaUrl(), drafts.ollamaModel(), drafts.maxTokens());
+        }
         Optional<String> key = claudeKey(env);
         if ("claude".equals(drafts.writer()) && key.isPresent()) {
             String model = drafts.model() == null || drafts.model().isBlank() ? props.model() : drafts.model();
@@ -162,8 +206,10 @@ public class AppConfig {
         }
         if ("claude".equals(drafts.writer())) {
             noKey("reply drafting");
+            return new TemplateReplyDrafter("the app has no Claude API key (set ANTHROPIC_API_KEY or save it in "
+                    + "~/.promise-graph/anthropic-key.txt, then restart)");
         }
-        return new TemplateReplyDrafter();
+        return new TemplateReplyDrafter("PG_DRAFTS_WRITER is set to template");
     }
 
     @Bean

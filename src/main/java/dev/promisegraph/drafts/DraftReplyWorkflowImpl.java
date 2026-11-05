@@ -30,7 +30,7 @@ public class DraftReplyWorkflowImpl implements DraftReplyWorkflow {
 
     private final DraftWriterActivities writer = Workflow.newActivityStub(DraftWriterActivities.class, ActivityOptions.newBuilder()
             .setTaskQueue(TASK_QUEUE_LLM)
-            .setStartToCloseTimeout(Duration.ofMinutes(2))
+            .setStartToCloseTimeout(Duration.ofMinutes(3)) // a local model on a laptop can be slow
             .setRetryOptions(RetryOptions.newBuilder()
                     .setInitialInterval(Duration.ofSeconds(3))
                     .setBackoffCoefficient(2.0)
@@ -50,10 +50,11 @@ public class DraftReplyWorkflowImpl implements DraftReplyWorkflow {
         try {
             written = writer.writeReply(ctx);
         } catch (ActivityFailure e) {
-            // Claude stayed unavailable: still leave the person a starting point.
-            log.warn("draft for {} written without Claude: {}", ctx.sourceMessageId(),
-                    e.getCause() == null ? e.getMessage() : e.getCause().getMessage());
-            written = new Written(TemplateReplyDrafter.compose(ctx), TemplateReplyDrafter.BY);
+            // The model stayed unavailable: still leave the person a starting point.
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            String why = cause instanceof io.temporal.failure.ApplicationFailure af ? af.getOriginalMessage() : cause.getMessage();
+            log.warn("draft for {} written without the AI writer: {}", ctx.sourceMessageId(), why);
+            written = new Written(TemplateReplyDrafter.compose(ctx), TemplateReplyDrafter.by("the AI writer failed: " + why));
         }
         io.saveDraft(ReplyDraft.of(ctx, written, Instant.ofEpochMilli(Workflow.currentTimeMillis()).toString()), request.replace());
         return "drafted";

@@ -180,6 +180,12 @@ class DraftsTest {
     }
 
     @Test
+    void localModelsThinkingIsDropped() {
+        assertThat(OllamaReplyDrafter.stripThinking("<think>plan the reply</think>\nHi Neha,")).isEqualTo("Hi Neha,");
+        assertThat(new OllamaReplyDrafter("http://localhost:11434/", "llama3.2", 600).by()).isEqualTo("ollama:llama3.2");
+    }
+
+    @Test
     void workflowDraftsAReplyForTheMailboxOwner() {
         try (TestWorkflowEnvironment env = TestWorkflowEnvironment.newInstance()) {
             TestStack stack = new TestStack(env);

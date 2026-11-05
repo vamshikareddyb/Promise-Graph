@@ -17,11 +17,32 @@ import java.util.Locale;
 public final class TemplateReplyDrafter implements ReplyDrafter {
 
     public static final String BY = "template";
+
+    /** Why Claude isn't writing, shown with the draft (e.g. "ANTHROPIC_API_KEY is not set"); null in tests. */
+    private final String reason;
+
+    public TemplateReplyDrafter() {
+        this(null);
+    }
+
+    public TemplateReplyDrafter(String reason) {
+        this.reason = reason;
+    }
+
+    /** Why Claude isn't writing, or null. */
+    public String reason() {
+        return reason;
+    }
+
+    /** "template: why", so the page can say why Claude didn't write the draft. */
+    public static String by(String reason) {
+        return reason == null || reason.isBlank() ? BY : BY + ": " + reason.strip();
+    }
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH);
 
     @Override
     public Written write(DraftContext context) {
-        return new Written(compose(context), BY);
+        return new Written(compose(context), by(reason));
     }
 
     public static String compose(DraftContext ctx) {
