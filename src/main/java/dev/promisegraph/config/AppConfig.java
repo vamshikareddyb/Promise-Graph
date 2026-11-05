@@ -131,20 +131,45 @@ public class AppConfig {
      * agent falls back to its rule-based version and says so in the log.
      */
     static Optional<String> claudeKey(Environment env) {
-        Optional<String> fromEnv = Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(String::strip).filter(k -> !k.isEmpty());
+        Optional<String> fromEnv = Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(AppConfig::cleanKey).filter(k -> !k.isEmpty());
         if (fromEnv.isPresent()) {
+            logKeyOnce("the ANTHROPIC_API_KEY environment variable", fromEnv.get());
             return fromEnv;
         }
         // Saved once, so it works however the app is started (any terminal, the IDE, a script).
         java.nio.file.Path file = java.nio.file.Path.of(System.getProperty("user.home"), ".promise-graph", "anthropic-key.txt");
         try {
             if (java.nio.file.Files.isRegularFile(file)) {
-                return Optional.of(java.nio.file.Files.readString(file).strip()).filter(k -> !k.isEmpty());
+                Optional<String> key = Optional.of(cleanKey(java.nio.file.Files.readString(file))).filter(k -> !k.isEmpty());
+                key.ifPresent(k -> logKeyOnce(file.toString(), k));
+                return key;
             }
         } catch (java.io.IOException e) {
             log.warn("could not read {}: {}", file, e.getMessage());
         }
         return Optional.empty();
+    }
+
+    /** Drops what copying a key tends to add: spaces, line breaks, a byte-order mark, surrounding quotes. */
+    static String cleanKey(String raw) {
+        String k = raw.replace("\uFEFF", "").strip();
+        if (k.length() >= 2 && (k.startsWith("\"") && k.endsWith("\"") || k.startsWith("'") && k.endsWith("'"))) {
+            k = k.substring(1, k.length() - 1).strip();
+        }
+        return k;
+    }
+
+    private static volatile boolean keyLogged;
+
+    /** Says once where the key came from and which key it is (never the whole key), to check against the console. */
+    private static void logKeyOnce(String source, String key) {
+        if (keyLogged) {
+            return;
+        }
+        keyLogged = true;
+        String shown = key.length() <= 14 ? "(" + key.length() + " characters)" : key.substring(0, 10) + "..." + key.substring(key.length() - 4);
+        log.info("Claude API key from {}: {}{}", source, shown,
+                key.startsWith("sk-ant-api") ? "" : " - this doesn't look like an API key; they start with sk-ant-api");
     }
 
     private static void noKey(String what) {
