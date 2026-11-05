@@ -35,10 +35,17 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -68,9 +75,48 @@ class ReplayTest {
         WorkflowReplayer.replayWorkflowExecution(history, WORKFLOWS[0], java.util.Arrays.copyOfRange(WORKFLOWS, 1, WORKFLOWS.length));
     }
 
+    /** How long one run of the story may take for real; it normally takes a few seconds. */
+    static final Duration STORY_LIMIT = Duration.ofSeconds(120);
+
+    /**
+     * Runs the story, once more if it stalls. Now and then the time-skipping test server stops
+     * advancing time partway through (seen 2 times in about 60 CI runs, always during the same long
+     * sleep), and the run hangs. A stalled run prints the threads that were busy, then is closed and
+     * run again from scratch; a second stall fails the test.
+     */
+    static Map<String, WorkflowExecutionHistory> runStoryWithRetry() throws Exception {
+        for (int attempt = 1; ; attempt++) {
+            AtomicReference<TestWorkflowEnvironment> current = new AtomicReference<>();
+            ExecutorService runner = Executors.newSingleThreadExecutor();
+            Future<Map<String, WorkflowExecutionHistory>> story = runner.submit(() -> runStory(current));
+            try {
+                return story.get(STORY_LIMIT.toSeconds(), TimeUnit.SECONDS);
+            } catch (TimeoutException stalled) {
+                System.out.println("story attempt " + attempt + " stalled after " + STORY_LIMIT + "; busy threads:");
+                Thread.getAllStackTraces().forEach((t, stack) -> {
+                    if (Arrays.stream(stack).anyMatch(f -> f.getClassName().startsWith("dev.promisegraph"))) {
+                        System.out.println("  " + t.getName());
+                        Arrays.stream(stack).limit(25).forEach(f -> System.out.println("    at " + f));
+                    }
+                });
+                TestWorkflowEnvironment env = current.get();
+                if (env != null) {
+                    env.close();
+                }
+                story.cancel(true);
+                if (attempt >= 2) {
+                    throw new AssertionError("the story stalled twice; see the threads printed above", stalled);
+                }
+            } finally {
+                runner.shutdownNow();
+            }
+        }
+    }
+
     /** Runs one story touching every main workflow type and returns their histories by name. */
-    static Map<String, WorkflowExecutionHistory> runStory() {
+    static Map<String, WorkflowExecutionHistory> runStory(AtomicReference<TestWorkflowEnvironment> current) {
         TestWorkflowEnvironment env = TestWorkflowEnvironment.newInstance();
+        current.set(env);
         try {
             WorkflowClient client = env.getWorkflowClient();
             TestStack stack = new TestStack(env);
@@ -148,7 +194,7 @@ class ReplayTest {
     @Test
     @Timeout(300)
     void everyWorkflowTypeReplaysItsOwnHistory() throws Exception {
-        Map<String, WorkflowExecutionHistory> histories = runStory();
+        Map<String, WorkflowExecutionHistory> histories = runStoryWithRetry();
         for (var e : histories.entrySet()) {
             assertThat(e.getValue().getEvents()).as(e.getKey()).isNotEmpty();
             replay(e.getValue());
