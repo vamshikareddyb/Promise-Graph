@@ -29,6 +29,11 @@ public final class TemplateReplyDrafter implements ReplyDrafter {
         this.reason = reason;
     }
 
+    /** Why Claude isn't writing, or null. */
+    public String reason() {
+        return reason;
+    }
+
     /** "template: why", so the page can say why Claude didn't write the draft. */
     public static String by(String reason) {
         return reason == null || reason.isBlank() ? BY : BY + ": " + reason.strip();

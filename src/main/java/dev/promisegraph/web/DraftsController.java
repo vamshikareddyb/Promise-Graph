@@ -11,6 +11,8 @@ import dev.promisegraph.drafts.DraftStore;
 import dev.promisegraph.drafts.EmailRef;
 import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.drafts.ReplyDraft;
+import dev.promisegraph.drafts.ReplyDrafter;
+import dev.promisegraph.drafts.TemplateReplyDrafter;
 import dev.promisegraph.inbox.InboxService;
 import dev.promisegraph.ops.AuditEntry;
 import dev.promisegraph.store.AuditLog;
@@ -64,10 +66,13 @@ public class DraftsController {
     private final Repository repo;
     private final WorkflowClient client;
     private final AuditLog audit;
+    /** Who writes drafts in this run of the app: Claude, or the template (with why). */
+    private final ReplyDrafter drafter;
     private final ObjectProvider<MailboxOwner> mailbox;
 
     public DraftsController(PromiseGraphProperties props, DraftStore drafts, Repository repo, WorkflowClient client, AuditLog audit,
-            ObjectProvider<MailboxOwner> mailbox) {
+            ObjectProvider<MailboxOwner> mailbox, ReplyDrafter drafter) {
+        this.drafter = drafter;
         this.tenant = props.tenant();
         this.mailbox = mailbox;
         this.drafts = drafts;
@@ -141,6 +146,11 @@ public class DraftsController {
 
     // ------------------------------------------------------------ follow-ups on a promise
 
+    /** "claude", or "template: why Claude isn't writing", for the page to explain a plain draft. */
+    private String writer() {
+        return drafter instanceof TemplateReplyDrafter t ? TemplateReplyDrafter.by(t.reason()) : "claude";
+    }
+
     /** The latest email a promise was made or changed in, if it came from Gmail. */
     public static Optional<Evidence> emailEvidence(Promise p) {
         for (int i = p.evidence().size() - 1; i >= 0; i--) {
@@ -178,6 +188,7 @@ public class DraftsController {
         String viewer = ApiController.require(viewerHeader);
         followable(viewer, promiseId);
         Map<String, Object> out = new HashMap<>();
+        out.put("writer", writer());
         out.put("draft", drafts.get(tenant, ReplyDraft.forPromise(tenant, promiseId)).filter(d -> d.owner().equalsIgnoreCase(viewer))
                 .map(this::view).orElse(null));
         return out;
@@ -198,7 +209,11 @@ public class DraftsController {
         Optional<ReplyDraft> existing = drafts.get(tenant, ReplyDraft.forPromise(tenant, promiseId));
         boolean regenerate = req != null && req.regenerate();
         Map<String, Object> out = new HashMap<>();
-        if (existing.isPresent() && !regenerate) {
+        out.put("writer", writer());
+        // A draft the template wrote before Claude was set up is replaced as soon as Claude can write it.
+        boolean outdated = existing.isPresent() && existing.get().writtenBy() != null
+                && existing.get().writtenBy().startsWith(TemplateReplyDrafter.BY) && !(drafter instanceof TemplateReplyDrafter);
+        if (existing.isPresent() && !regenerate && !outdated) {
             out.put("status", "ready");
             out.put("draft", view(existing.get()));
             return out;

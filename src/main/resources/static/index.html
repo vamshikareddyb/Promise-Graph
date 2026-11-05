@@ -424,7 +424,9 @@ function followUpPanel(id) {
   const text = f.edit ?? d.body;
   return `<div class="draft-head"><div><b>${esc(d.subject)}</b> <span class="meta">to ${esc(d.to || '—')}</span></div>
       <span class="meta">${isTemplate(d) ? 'Plain template, not Claude' : 'Drafted by Claude'} · ${when(d.updatedAt)}</span></div>
-    ${isTemplate(d) ? `<div class="note">Claude didn't write this: ${esc(templateReason(d))}. Rewrite can't change a template; fix that and click Rewrite.</div>` : ''}
+    ${isTemplate(d) ? `<div class="note">${f.writer === 'claude'
+      ? 'This was written before Claude was set up. Click Rewrite and Claude will write it from the email thread.'
+      : `Claude can't write drafts right now: ${esc(templateReason({ writtenBy: f.writer || d.writtenBy }))}. Until that's fixed, Rewrite gives the same plain template.`}</div>` : ''}
     <textarea aria-label="Follow-up draft">${esc(text)}</textarea>
     <div class="row">
       <button class="act primary" data-fu="copy">Copy</button>
@@ -443,13 +445,13 @@ async function startFollowUp(id, instruction = null, regenerate = false) {
   render();
   try {
     const r = await post(`/drafts/promise/${encodeURIComponent(id)}`, { instruction, regenerate });
-    if (r.status === 'ready') { followUps[id] = { draft: r.draft }; render(); return; }
+    if (r.status === 'ready') { followUps[id] = { draft: r.draft, writer: r.writer }; render(); return; }
     const previous = r.previous;
     for (let i = 0; i < 45; i++) {
       await new Promise(res => setTimeout(res, 2000));
       if (!followUps[id]) return; // closed meanwhile
       const g = await api(`/drafts/promise/${encodeURIComponent(id)}`);
-      if (g.draft && g.draft.updatedAt !== previous) { followUps[id] = { draft: g.draft }; render(); return; }
+      if (g.draft && g.draft.updatedAt !== previous) { followUps[id] = { draft: g.draft, writer: g.writer }; render(); return; }
     }
     followUps[id] = { error: 'No draft yet. Claude may be busy; try again in a minute (the app log says more).' };
   } catch (e) { followUps[id] = { error: e.message }; }
@@ -477,7 +479,7 @@ function wireFollowUps() {
           b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500);
         } else if (b.dataset.fu === 'save') {
           b.disabled = true;
-          followUps[id] = { draft: await put(`/drafts/${encodeURIComponent(followUps[id].draft.id)}`, { body: t.value }) };
+          followUps[id] = { draft: await put(`/drafts/${encodeURIComponent(followUps[id].draft.id)}`, { body: t.value }), writer: followUps[id].writer };
           render();
         } else if (b.dataset.fu === 'rewrite') {
           startFollowUp(id, row.querySelector('input[type=text]').value || null, true);
