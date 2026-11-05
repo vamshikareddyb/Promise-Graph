@@ -41,4 +41,15 @@ class RequestsTest {
         assertThat(Requests.find(new Message("m2", "platform", "neha", "2026-11-04T18:32:10Z", "You need to submit it by friday", "demo")))
                 .isEmpty();
     }
+
+    @Test
+    void theDeadlineCanComeFromAnotherSentence() {
+        Commitment c = find("We have a meeting with the client on 07/11/2026. I want you to keep a checklist regarding the client "
+                + "requirement checklist and keep me posted about it.").orElseThrow();
+        assertThat(c.what()).isEqualTo("keep a checklist regarding the client requirement checklist");
+        assertThat(c.due()).isEqualTo("2026-11-07");
+        assertThat(c.confidence()).isEqualTo(Requests.CONFIDENCE_DATE_ELSEWHERE);
+        assertThat(find("The launch was on 01/10/2026. Please update the tracker.")).isEmpty(); // a past date isn't a deadline
+        assertThat(find("I want you to review the draft.")).isEmpty(); // still needs some date
+    }
 }

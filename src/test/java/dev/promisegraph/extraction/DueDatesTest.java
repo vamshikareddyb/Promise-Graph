@@ -53,4 +53,15 @@ class DueDatesTest {
         assertThat(DueDates.parseShiftDays("pushed back by a week")).contains(7);
         assertThat(DueDates.parseShiftDays("will slip to Friday")).isEmpty();
     }
+
+    @Test
+    void numericDatesAreDayFirst() {
+        assertThat(DueDates.parseDue("by 07/11/2026", MONDAY)).contains(LocalDate.of(2026, 11, 7));
+        assertThat(DueDates.parseDue("on 07.11.2026", MONDAY)).contains(LocalDate.of(2026, 11, 7));
+        assertThat(DueDates.parseDue("by 7-11-26", MONDAY)).contains(LocalDate.of(2026, 11, 7));
+        assertThat(DueDates.parseDue("by 11/25/2026", MONDAY)).contains(LocalDate.of(2026, 11, 25)); // can only be month first
+        assertThat(DueDates.parseDue("by 12/11", MONDAY)).contains(LocalDate.of(2026, 11, 12));
+        assertThat(DueDates.parseDue("3/4 of the team agreed", MONDAY)).isEmpty();
+        assertThat(DueDates.parseDue("by 31/02/2026", MONDAY)).isEmpty();
+    }
 }

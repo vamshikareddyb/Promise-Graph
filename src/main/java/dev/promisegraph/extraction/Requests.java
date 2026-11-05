@@ -4,6 +4,7 @@ import dev.promisegraph.domain.Commitment;
 import dev.promisegraph.domain.CommitmentKind;
 import dev.promisegraph.domain.Message;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -31,7 +32,8 @@ public final class Requests {
     private static final int CI = Pattern.CASE_INSENSITIVE;
     private static final Pattern REQUEST = Pattern.compile(
             "\\b(?:you need to|you have to|you must|you should|you'll need to|you will need to|you are to|"
-                    + "i need you to|i'd like you to|make sure (?:you|to)|please|kindly|"
+                    + "i need you to|i'd like you to|i would like you to|i want you to|we need you to|we want you to|"
+                    + "we'd like you to|we would like you to|make sure (?:you|to)|please|kindly|"
                     + "can you|could you|would you|will you)\\s+(?:please\\s+)?(.+)$", CI);
     /** Politeness that asks for nothing to be done. */
     private static final Pattern NOT_A_TASK = Pattern.compile(
@@ -39,6 +41,11 @@ public final class Requests {
     private static final Pattern DEADLINE_TAIL = Pattern.compile(
             "\\s+(?:by|before|on|until|till|no later than|this|next|tomorrow|today|eod|asap)\\b.*$", CI);
     private static final Pattern CLAUSE_TAIL = Pattern.compile("\\s+(?:so|once|when|because|after|if)\\b.*$", CI);
+    /** "... and keep me posted": asks for updates, not a second task. */
+    private static final Pattern UPDATES_TAIL = Pattern.compile(
+            "\\s*,?\\s+and (?:keep|let) (?:me|us) (?:posted|updated|informed|know|in the loop)\\b.*$", CI);
+    /** Below {@link #CONFIDENCE}: the deadline came from another sentence ("the meeting is on 7 Nov"). */
+    static final double CONFIDENCE_DATE_ELSEWHERE = 0.6;
 
     private Requests() {}
 
@@ -66,7 +73,9 @@ public final class Requests {
             return Optional.empty();
         }
         LocalDate sent = m.timestamp().toLocalDate();
-        for (String sentence : Detect.sentences(m.text())) {
+        List<String> sentences = Detect.sentences(m.text());
+        Commitment withoutOwnDate = null;
+        for (String sentence : sentences) {
             String s = sentence.replace('’', '\'');
             Matcher r = REQUEST.matcher(s);
             if (!r.find()) {
@@ -76,16 +85,38 @@ public final class Requests {
             if (NOT_A_TASK.matcher(task).find()) {
                 continue;
             }
-            Optional<LocalDate> due = DueDates.parseDue(s, sent);
-            if (due.isEmpty()) {
-                continue;
-            }
-            String what = clean(CLAUSE_TAIL.matcher(DEADLINE_TAIL.matcher(task).replaceFirst("")).replaceFirst(""));
+            String what = clean(CLAUSE_TAIL.matcher(UPDATES_TAIL.matcher(DEADLINE_TAIL.matcher(task).replaceFirst("")).replaceFirst(""))
+                    .replaceFirst(""));
             if (what.length() < 3) {
                 continue;
             }
-            return Optional.of(new Commitment(CommitmentKind.NEW, m.id(), ADDRESSEE, what, sentence.strip(), CONFIDENCE,
-                    m.channel(), m.sender(), due.get().toString(), null));
+            Optional<LocalDate> due = DueDates.parseDue(s, sent);
+            if (due.isPresent()) {
+                return Optional.of(new Commitment(CommitmentKind.NEW, m.id(), ADDRESSEE, what, sentence.strip(), CONFIDENCE,
+                        m.channel(), m.sender(), due.get().toString(), null));
+            }
+            if (withoutOwnDate == null) {
+                // "We meet the client on 07/11/2026. I want you to keep a checklist ...": the email's date is the deadline.
+                Optional<LocalDate> elsewhere = dateElsewhere(sentences, sentence, sent);
+                if (elsewhere.isPresent()) {
+                    withoutOwnDate = new Commitment(CommitmentKind.NEW, m.id(), ADDRESSEE, what, sentence.strip(),
+                            CONFIDENCE_DATE_ELSEWHERE, m.channel(), m.sender(), elsewhere.get().toString(), null);
+                }
+            }
+        }
+        return Optional.ofNullable(withoutOwnDate);
+    }
+
+    /** The first date, not already past, stated in another sentence of the same email */
+    private static Optional<LocalDate> dateElsewhere(List<String> sentences, String except, LocalDate sent) {
+        for (String other : sentences) {
+            if (other.equals(except)) {
+                continue;
+            }
+            Optional<LocalDate> d = DueDates.parseDue(other, sent).filter(x -> !x.isBefore(sent));
+            if (d.isPresent()) {
+                return d;
+            }
         }
         return Optional.empty();
     }

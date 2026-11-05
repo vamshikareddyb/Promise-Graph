@@ -29,13 +29,17 @@ public final class DueDates {
     private static final String NUMBER_RE = "(\\d+|a|one|two|three|four|five|six|seven|eight|nine|ten)";
     private static final Pattern TRIGGER = Pattern.compile("\\b(by|before|on|to|until|till|for)\\s*$");
 
-    private enum Kind { ISO, DAY_MONTH, MONTH_DAY, TOMORROW, TODAY, END_OF_WEEK, NEXT_WEEK, END_OF_MONTH, NEXT_WEEKDAY, WEEKDAY, IN_N }
+    private enum Kind { ISO, NUMERIC, NUMERIC_SHORT, DAY_MONTH, MONTH_DAY, TOMORROW, TODAY, END_OF_WEEK, NEXT_WEEK, END_OF_MONTH, NEXT_WEEKDAY, WEEKDAY, IN_N }
 
     private record Rule(Kind kind, Pattern pattern) {}
 
     // Order matters: more specific patterns first; later ones skip spans already taken.
     private static final List<Rule> RULES = List.of(
             new Rule(Kind.ISO, Pattern.compile("\\b(\\d{4})-(\\d{2})-(\\d{2})\\b")),
+            // 07/11/2026, 7-11-26, 07.11.2026: day first (as written in India and the UK) unless that can't be
+            new Rule(Kind.NUMERIC, Pattern.compile("\\b(\\d{1,2})[/.-](\\d{1,2})[/.-](\\d{4}|\\d{2})\\b")),
+            // 12/11 only right after a deadline word, so "3/4 of the team" isn't a date
+            new Rule(Kind.NUMERIC_SHORT, Pattern.compile("(?<=\\b(?:by|on|before|until|till|due) )(\\d{1,2})/(\\d{1,2})\\b(?![/.-]\\d)")),
             new Rule(Kind.DAY_MONTH, Pattern.compile("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+" + MONTH_RE + "(?![a-z])")),
             new Rule(Kind.MONTH_DAY, Pattern.compile("\\b" + MONTH_RE + "\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b")),
             new Rule(Kind.TOMORROW, Pattern.compile("\\btomorrow\\b")),
@@ -72,6 +76,28 @@ public final class DueDates {
         }
     }
 
+    /** Day first; month first only when the first number can't be a month's day order (e.g. 11/25). */
+    private static LocalDate numeric(int a, int b, String year, LocalDate sent) {
+        int day = a;
+        int month = b;
+        if (b > 12 && a <= 12) {
+            day = b;
+            month = a;
+        }
+        if (month < 1 || month > 12) {
+            return null;
+        }
+        if (year == null) {
+            return explicit(day, month, sent);
+        }
+        int y = Integer.parseInt(year);
+        try {
+            return LocalDate.of(y < 100 ? 2000 + y : y, month, day);
+        } catch (DateTimeException e) {
+            return null;
+        }
+    }
+
     private static DayOfWeek weekday(String name) {
         return DayOfWeek.valueOf(name.toUpperCase(Locale.ROOT));
     }
@@ -85,6 +111,8 @@ public final class DueDates {
                     yield null;
                 }
             }
+            case NUMERIC -> numeric(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), m.group(3), sent);
+            case NUMERIC_SHORT -> numeric(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), null, sent);
             case DAY_MONTH -> explicit(Integer.parseInt(m.group(1)), MONTHS.get(m.group(2).substring(0, 3)), sent);
             case MONTH_DAY -> explicit(Integer.parseInt(m.group(2)), MONTHS.get(m.group(1).substring(0, 3)), sent);
             case TOMORROW -> sent.plusDays(1);
