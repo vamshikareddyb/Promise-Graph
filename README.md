@@ -57,12 +57,13 @@ people read and answer everything in the web inbox (http://localhost:8787)
   handoff cover and proposes recovery plans, using read-only tools, with a step limit and the same
   checks as the rules. Anything it doesn't settle falls back to the rules, and without
   `ANTHROPIC_API_KEY` every agent uses its rules (the log says so at startup).
-- **Reply drafts.** After an email's promises are on the graph, a second agent drafts your reply: a
-  `DraftReplyWorkflow` reads the whole Gmail thread plus the promises around it (made in that thread,
-  and open ones between the same two people) and Claude writes a reply that confirms your promises
-  and dates, thanks the other person for theirs and leaves `[placeholders]` where only you can
-  decide. Drafts appear on the Drafts page; you edit, ask Claude to rewrite ("shorter"), copy into
-  Gmail and mark as sent. Nothing is ever sent for you, and no new Gmail permission is needed.
+- **Follow-up drafts.** On the Promises page, "Draft a follow-up" on a promise that came from email
+  starts a second agent: a `DraftReplyWorkflow` reads the whole Gmail thread plus the promises
+  around it (made in that thread, and open ones between the same two people) and Claude writes the
+  follow-up. For your own promise it's an update ("on track for Friday 6 Nov"); for someone else's,
+  a polite check-in on it. It opens under the promise, where you edit it, ask Claude to rewrite it
+  ("shorter"), copy it or open the thread in Gmail. Nothing is ever sent for you, and no new Gmail
+  permission is needed. `PG_DRAFTS_AUTO=true` also drafts a reply to every such email unasked.
 
 | Package | What it holds |
 | --- | --- |
@@ -95,8 +96,8 @@ docker compose up -d       # Temporal, Temporal UI (http://localhost:8080), Post
 ```
 
 Open **http://localhost:8787** for the web app. Pick who you are at the top right; the Inbox shows
-that person's reminders and questions with buttons to answer them. The other tabs show promises,
-links, a dependency graph, handoffs and recovery plans. The Temporal UI shows every workflow and its history.
+that person's reminders and questions with buttons to answer them. The other tabs show promises
+(with follow-up drafts), links, a dependency graph and handoffs; recovery plans are voted on from the Inbox. The Temporal UI shows every workflow and its history.
 
 To read your own Gmail, follow [docs/gmail-setup.md](docs/gmail-setup.md). For a team, where everyone
 signs in with Google, sees only their own promises and hands work over when on leave or leaving,
@@ -113,7 +114,7 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 | `ANTHROPIC_API_KEY` | empty | Claude, for every agent; without it each falls back to its rules |
 | `PG_MODEL` | `claude-sonnet-5-5` | The Claude model the agents use |
 | `PG_EXTRACTOR` | `llm` | Claude finds promises; `rules` uses the built-in patterns |
-| `PG_DRAFTS_ENABLED` | `true` | Draft a reply to each email that brings a promise or a request |
+| `PG_DRAFTS_AUTO` | `false` | `true`: also draft a reply to every email that brings a promise, without being asked |
 | `PG_DRAFTS_WRITER` | `claude` | `template`: a plain acknowledgement, no model |
 | `PG_DRAFTS_MODEL` | empty | A different Claude model for drafts (empty: `PG_MODEL`) |
 | `PG_HANDOFF_PLANNER` | `agent` | Claude plans handoff cover; `rules` uses the built-in rules |

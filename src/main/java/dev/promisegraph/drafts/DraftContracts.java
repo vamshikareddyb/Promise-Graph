@@ -18,16 +18,27 @@ public final class DraftContracts {
     }
 
     /**
-     * Draft a reply to one email.
+     * Draft an email: a reply to one email, or (with {@code promiseId}) a follow-up about one promise
+     * in the thread it was made in.
      *
-     * @param message the email, as extraction saw it (already redacted)
-     * @param instruction what the person asked for when regenerating ("shorter", "decline politely"), or null
+     * @param message the email, as extraction saw it (already redacted); for a follow-up, the email the promise came from
+     * @param instruction what the person asked for ("shorter", "decline politely"), or null
      * @param replace true when regenerating: overwrite the existing draft
+     * @param promiseId the promise to follow up on, or null for a plain reply
      */
-    public record DraftRequest(String tenant, Message message, String instruction, boolean replace) {
+    public record DraftRequest(String tenant, Message message, String instruction, boolean replace, String promiseId) {
 
         public static DraftRequest first(String tenant, Message message) {
-            return new DraftRequest(tenant, message, null, false);
+            return new DraftRequest(tenant, message, null, false, null);
+        }
+
+        public static DraftRequest followUp(String tenant, Message message, String promiseId, String instruction, boolean replace) {
+            return new DraftRequest(tenant, message, instruction, replace, promiseId);
+        }
+
+        /** What the draft is keyed by: the promise for a follow-up, else the email. */
+        public String key() {
+            return promiseId == null ? message.id() : "promise-" + promiseId;
         }
 
         /**
@@ -65,6 +76,7 @@ public final class DraftContracts {
      * @param owner whose mailbox this is: the reply is written as them
      * @param replyTo who the reply goes to
      * @param now when the draft is written, ISO 8601, so relative dates come out right
+     * @param focusPromiseId for a follow-up, the promise it is about; null for a plain reply
      */
     public record DraftContext(
             String tenant,
@@ -78,11 +90,23 @@ public final class DraftContracts {
             List<ThreadMessage> thread,
             List<PromiseNote> promises,
             String instruction,
-            String now) {
+            String now,
+            String focusPromiseId) {
 
         public DraftContext {
             thread = thread == null ? List.of() : List.copyOf(thread);
             promises = promises == null ? List.of() : List.copyOf(promises);
+        }
+
+        /** The promise a follow-up is about, if it is among the promises. */
+        public java.util.Optional<PromiseNote> focus() {
+            return focusPromiseId == null ? java.util.Optional.empty()
+                    : promises.stream().filter(p -> p.id().equals(focusPromiseId)).findFirst();
+        }
+
+        /** The draft's key: the same one the request had. */
+        public String key() {
+            return focusPromiseId == null ? sourceMessageId : "promise-" + focusPromiseId;
         }
     }
 

@@ -131,7 +131,7 @@ public class TemporalConfig {
                 new NegotiationActivitiesImpl(situations, repo, negotiationStore, promises, client, policy, Clock.systemUTC()),
                 new RecoveryActivitiesImpl(recoveryPlanner, situations),
                 new OpsActivitiesImpl(repo, deadLetters, audit, client, timing, props.confidenceThreshold()),
-                new DraftActivitiesImpl(draftProps.enabled(), client, repo, draftStore,
+                new DraftActivitiesImpl(draftProps.auto(), client, repo, draftStore,
                         box -> box == null ? Optional.ofNullable(personalGmail.getIfAvailable())
                                 : Optional.ofNullable(teamGmail.getIfAvailable()).map(t -> t.forMailbox(box)),
                         () -> Optional.ofNullable(mailbox.getIfAvailable()).flatMap(MailboxOwner::email), Clock.systemUTC()),

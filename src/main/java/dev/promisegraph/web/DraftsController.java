@@ -1,12 +1,15 @@
 package dev.promisegraph.web;
 
 import dev.promisegraph.config.PromiseGraphProperties;
+import dev.promisegraph.domain.Evidence;
 import dev.promisegraph.domain.Message;
 import dev.promisegraph.domain.Promise;
 import dev.promisegraph.drafts.DraftActivitiesImpl;
 import dev.promisegraph.drafts.DraftContracts;
 import dev.promisegraph.drafts.DraftContracts.DraftRequest;
 import dev.promisegraph.drafts.DraftStore;
+import dev.promisegraph.drafts.EmailRef;
+import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.drafts.ReplyDraft;
 import dev.promisegraph.inbox.InboxService;
 import dev.promisegraph.ops.AuditEntry;
@@ -16,9 +19,11 @@ import io.temporal.client.WorkflowClient;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,14 +54,20 @@ public class DraftsController {
 
     public record Regenerate(String instruction) {}
 
+    /** @param regenerate write a new version even if one exists */
+    public record FollowUp(String instruction, boolean regenerate) {}
+
     private final String tenant;
     private final DraftStore drafts;
     private final Repository repo;
     private final WorkflowClient client;
     private final AuditLog audit;
+    private final ObjectProvider<MailboxOwner> mailbox;
 
-    public DraftsController(PromiseGraphProperties props, DraftStore drafts, Repository repo, WorkflowClient client, AuditLog audit) {
+    public DraftsController(PromiseGraphProperties props, DraftStore drafts, Repository repo, WorkflowClient client, AuditLog audit,
+            ObjectProvider<MailboxOwner> mailbox) {
         this.tenant = props.tenant();
+        this.mailbox = mailbox;
         this.drafts = drafts;
         this.repo = repo;
         this.client = client;
@@ -121,9 +132,85 @@ public class DraftsController {
         String instruction = req == null || req.instruction() == null || req.instruction().isBlank() ? null : req.instruction().strip();
         Message source = new Message(d.sourceMessageId(), d.channel(), d.to(), d.createdAt(), "", tenant);
         String workflowId = DraftContracts.workflowId(tenant, d.sourceMessageId()) + "-r" + System.currentTimeMillis();
-        DraftActivitiesImpl.start(client, new DraftRequest(tenant, source, instruction, true), workflowId);
+        DraftActivitiesImpl.start(client, new DraftRequest(tenant, source, instruction, true, null), workflowId);
         record(viewer, "draft:regenerate", id);
         return Map.of("status", "writing", "workflowId", workflowId);
+    }
+
+    // ------------------------------------------------------------ follow-ups on a promise
+
+    /** The latest email a promise was made or changed in, if it came from Gmail. */
+    public static Optional<Evidence> emailEvidence(Promise p) {
+        for (int i = p.evidence().size() - 1; i >= 0; i--) {
+            Evidence e = p.evidence().get(i);
+            if (EmailRef.of(e.channel(), e.messageId()).isPresent()) {
+                return Optional.of(e);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Whose mailbox the email is in: the account in its channel (team mode), else the personal Gmail account. */
+    public static Optional<String> mailboxOf(Evidence e, Optional<String> personal) {
+        return EmailRef.of(e.channel(), e.messageId()).flatMap(r -> r.mailbox() != null ? Optional.of(r.mailbox()) : personal);
+    }
+
+    private Optional<String> personalOwner() {
+        return Optional.ofNullable(mailbox.getIfAvailable()).flatMap(MailboxOwner::email);
+    }
+
+    /** The promise and its email, when the viewer owns the mailbox it came from. */
+    private Map.Entry<Promise, Evidence> followable(String viewer, String promiseId) {
+        Promise p = repo.getPromise(tenant, promiseId).orElseThrow(() -> new InboxService.ActionException(404, "no such promise"));
+        Evidence e = emailEvidence(p).orElseThrow(() -> new InboxService.ActionException(409, "this promise didn't come from an email"));
+        if (!mailboxOf(e, personalOwner()).map(viewer::equalsIgnoreCase).orElse(false)) {
+            throw new InboxService.ActionException(403, "only the owner of the mailbox it came from can draft a follow-up");
+        }
+        return Map.entry(p, e);
+    }
+
+    /** The follow-up drafted for a promise, if any: {@code {"draft": ...}} or {@code {"draft": null}}. */
+    @GetMapping("/promise/{promiseId}")
+    public Map<String, Object> followUp(@RequestHeader(name = ApiController.VIEWER, required = false) String viewerHeader,
+            @PathVariable String promiseId) {
+        String viewer = ApiController.require(viewerHeader);
+        followable(viewer, promiseId);
+        Map<String, Object> out = new HashMap<>();
+        out.put("draft", drafts.get(tenant, ReplyDraft.forPromise(tenant, promiseId)).filter(d -> d.owner().equalsIgnoreCase(viewer))
+                .map(this::view).orElse(null));
+        return out;
+    }
+
+    /**
+     * Drafts a follow-up on a promise from the email thread it came from. Returns the existing draft
+     * at once unless {@code regenerate}; otherwise Claude writes one in the background, and the page
+     * asks for it again until it appears.
+     */
+    @PostMapping("/promise/{promiseId}")
+    public Map<String, Object> draftFollowUp(@RequestHeader(name = ApiController.VIEWER, required = false) String viewerHeader,
+            @PathVariable String promiseId, @RequestBody(required = false) FollowUp req) {
+        String viewer = ApiController.require(viewerHeader);
+        Map.Entry<Promise, Evidence> pe = followable(viewer, promiseId);
+        Promise p = pe.getKey();
+        Evidence e = pe.getValue();
+        Optional<ReplyDraft> existing = drafts.get(tenant, ReplyDraft.forPromise(tenant, promiseId));
+        boolean regenerate = req != null && req.regenerate();
+        Map<String, Object> out = new HashMap<>();
+        if (existing.isPresent() && !regenerate) {
+            out.put("status", "ready");
+            out.put("draft", view(existing.get()));
+            return out;
+        }
+        String instruction = req == null || req.instruction() == null || req.instruction().isBlank() ? null : req.instruction().strip();
+        // The sender is only a fallback for who the follow-up goes to; the thread itself says who wrote what.
+        String other = p.owner() != null && !p.owner().equalsIgnoreCase(viewer) ? p.owner() : p.recipient();
+        Message source = new Message(e.messageId(), e.channel(), other, p.createdAt(), "", tenant);
+        String workflowId = DraftContracts.workflowId(tenant, "promise-" + promiseId) + "-" + System.currentTimeMillis();
+        DraftActivitiesImpl.start(client, DraftRequest.followUp(tenant, source, promiseId, instruction, existing.isPresent()), workflowId);
+        record(viewer, existing.isPresent() ? "draft:rewrite" : "draft:follow-up", promiseId);
+        out.put("status", "writing");
+        out.put("previous", existing.map(ReplyDraft::updatedAt).orElse(null));
+        return out;
     }
 
     @ExceptionHandler(InboxService.ActionException.class)

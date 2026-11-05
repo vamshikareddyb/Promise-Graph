@@ -27,7 +27,17 @@ public final class TemplateReplyDrafter implements ReplyDrafter {
     public static String compose(DraftContext ctx) {
         StringBuilder out = new StringBuilder();
         String first = firstName(ctx.replyTo());
-        out.append(first == null ? "Hi," : "Hi " + first + ",").append("\n\nThanks for your email.");
+        out.append(first == null ? "Hi," : "Hi " + first + ",");
+        if (ctx.focus().isPresent()) {
+            PromiseNote p = ctx.focus().get();
+            boolean mine = p.owner() != null && p.owner().equalsIgnoreCase(ctx.owner());
+            String due = p.due() == null ? "" : " by " + day(p.due());
+            out.append("\n\n").append(mine
+                    ? "A quick update: I'm on track to " + lower(p.what()) + due + ". [Add any detail here.]"
+                    : "Just checking in on " + planTo(p.what()) + due + ". Is it still on track?");
+            return out.append("\n\nThanks,").toString();
+        }
+        out.append("\n\nThanks for your email.");
         List<PromiseNote> here = ctx.promises().stream().filter(PromiseNote::thisThread).toList();
         for (PromiseNote p : here) {
             boolean mine = p.owner() != null && p.owner().equalsIgnoreCase(ctx.owner());
@@ -61,6 +71,11 @@ public final class TemplateReplyDrafter implements ReplyDrafter {
         String w = what.strip().replaceAll("[.!]+$", "");
         return w.length() > 1 && Character.isUpperCase(w.charAt(0)) && Character.isLowerCase(w.charAt(1))
                 ? Character.toLowerCase(w.charAt(0)) + w.substring(1) : w;
+    }
+
+    /** "send the deck" -> "your plan to send the deck". */
+    private static String planTo(String what) {
+        return "your plan to " + lower(what);
     }
 
     private static String day(String iso) {

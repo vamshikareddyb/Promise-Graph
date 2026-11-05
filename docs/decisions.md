@@ -263,3 +263,13 @@ already drafted. If Claude stays unavailable, a deterministic template still lea
 Drafts are only ever shown to the mailbox owner and are never sent: sending would need the
 `gmail.compose` scope and a person's explicit click, which can come later. The extraction change is
 behind `getVersion("draft-replies-after-extraction")`. Postgres needs `migrations/006_drafts.sql`.
+
+## 36. Drafts are asked for, per promise
+
+A page of drafts for every email was more than people wanted. Drafting is now a button on each
+promise that came from email ("Draft a follow-up"); the draft opens under the promise. The same
+`DraftReplyWorkflow` does the work, keyed by the promise instead of the email, and the prompt
+changes with who owes it: an update when it's yours, a check-in when it's theirs. A follow-up may
+start from the person's own email, so the "you wrote this" and "already answered" skips only apply
+to automatic replies, which are now off unless `PG_DRAFTS_AUTO=true`. The Drafts and Plans tabs
+are gone; recovery plans are still chosen from the Inbox.
