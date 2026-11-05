@@ -35,6 +35,10 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
 
     /** Departures wait for the lead to approve the plan; handoffs recorded before this replay without it. */
     static final String DEPARTURE_APPROVAL = "departure-approval";
+    /** Plan and ask for cover as soon as the absence is known, and pick up promises made since at the start. */
+    static final String PLAN_ON_APPLY = "plan-on-apply";
+    /** A cover who answers after the absence started still takes the promise over. */
+    static final String LATE_ACCEPT = "late-accept";
 
     /** Handoff moments happen at 09:30 India time (04:00 UTC), like reminders. */
     static final LocalTime HANDOFF_TIME_UTC = LocalTime.of(4, 0);
@@ -59,6 +63,7 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
     private String planner;
     private boolean cancelled;
     private boolean live; // after the absence starts, an accepted promise moves at once
+    private boolean lateAccept;
     private boolean departure; // leaving for good: the lead approves first, and nothing comes back
     private boolean approved = true; // only a departure starts unapproved
 
@@ -92,20 +97,26 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                 absence.endsOn(), absence.reason(), "scheduled", null, List.of(), now().toString());
         save("scheduled");
 
-        waitUntil(prepAt);
-        if (cancelled) {
-            return finishCancelled();
+        boolean planEarly = Workflow.getVersion(PLAN_ON_APPLY, Workflow.DEFAULT_VERSION, 1) >= 1;
+        if (!planEarly) {
+            waitUntil(prepAt);
+            if (cancelled) {
+                return finishCancelled();
+            }
         }
 
-        // 1. Plan who covers what.
+        // 1. Plan who covers what: as soon as the absence is known (it used to wait until a few days before).
         save("planning");
-        HandoffPlanning.Plan plan = planning.planHandoff(new PlanRequest(absence.tenant(), absence.handoffId(),
-                absence.person(), absence.startsOn(), absence.endsOn()));
-        planner = plan.planner();
-        decider = plan.decider();
-        for (HandoffPlanning.Item i : plan.items()) {
-            items.put(i.promiseId(), new ItemState(i.promiseId(), i.what(), i.due(), i.brief(), i.proposedOwner(), null,
-                    i.proposedOwner() == null ? "needs_owner" : "proposed", i.reason()));
+        plan();
+        if (items.isEmpty() && planEarly && now().isBefore(prepAt)) {
+            // Nothing open yet: look again a few days before, in case new promises were made.
+            save("scheduled");
+            waitUntil(prepAt);
+            if (cancelled) {
+                return finishCancelled();
+            }
+            save("planning");
+            plan();
         }
         if (items.isEmpty()) {
             save("nothing_to_hand_over");
@@ -181,6 +192,17 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         if (cancelled) {
             return finishCancelled();
         }
+        if (planEarly) {
+            // Promises made since the plan was drawn up need cover too.
+            for (ItemState i : plan()) {
+                if (i.proposedOwner() != null) {
+                    askCover(i, "ask");
+                } else {
+                    escalate(i, "plan");
+                }
+            }
+        }
+        lateAccept = Workflow.getVersion(LATE_ACCEPT, Workflow.DEFAULT_VERSION, 1) >= 1;
 
         // 4. The absence starts: move every accepted promise to its cover.
         Map<String, String> owners = new LinkedHashMap<>();
@@ -193,9 +215,13 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             } else if ("accepted".equals(i.state())) {
                 items.put(i.promiseId(), i.withState("closed")); // kept or cancelled before the absence
             } else {
+                boolean waiting = lateAccept && "proposed".equals(i.state());
                 items.put(i.promiseId(), i.withState("uncovered"));
-                notify(decider, "Nobody is covering \"" + i.what() + "\" while " + absence.person() + " is away "
-                        + window() + ". Choose someone on the Handoffs page.", List.of(), i.promiseId(), "uncovered", i.promiseId());
+                notify(decider, waiting
+                        ? i.proposedOwner() + " hasn't answered yet about covering \"" + i.what() + "\" for " + absence.person() + " ("
+                                + window() + "). It moves to them as soon as they accept, or choose someone else on the Handoffs page."
+                        : "Nobody is covering \"" + i.what() + "\" while " + absence.person() + " is away "
+                                + window() + ". Choose someone on the Handoffs page.", List.of(), i.promiseId(), "uncovered", i.promiseId());
             }
         }
         live = true;
@@ -269,7 +295,8 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             }
             switch (r.kind()) {
                 case "accept" -> {
-                    if ("proposed".equals(i.state()) && r.by().equals(i.proposedOwner())) {
+                    boolean late = lateAccept && "uncovered".equals(i.state()) && i.acceptedOwner() == null;
+                    if (("proposed".equals(i.state()) || late) && r.by().equals(i.proposedOwner())) {
                         items.put(i.promiseId(), i.accepted(r.by()));
                         notify(absence.person(), r.by() + " will cover \"" + i.what() + "\" while you're away.",
                                 List.of(), i.promiseId(), "accepted", i.promiseId());
@@ -304,6 +331,26 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         if (changed) {
             save(state.status().equals("awaiting_cover") && allAccepted() ? "covered" : state.status());
         }
+    }
+
+    /** Plans cover for the person's open promises not planned yet; returns the new items. */
+    private List<ItemState> plan() {
+        HandoffPlanning.Plan plan = planning.planHandoff(new PlanRequest(absence.tenant(), absence.handoffId(),
+                absence.person(), absence.startsOn(), absence.endsOn()));
+        if (planner == null) {
+            planner = plan.planner();
+            decider = plan.decider();
+        }
+        List<ItemState> added = new ArrayList<>();
+        for (HandoffPlanning.Item i : plan.items()) {
+            if (!items.containsKey(i.promiseId())) {
+                ItemState item = new ItemState(i.promiseId(), i.what(), i.due(), i.brief(), i.proposedOwner(), null,
+                        i.proposedOwner() == null ? "needs_owner" : "proposed", i.reason());
+                items.put(i.promiseId(), item);
+                added.add(item);
+            }
+        }
+        return added;
     }
 
     private boolean allAccepted() {

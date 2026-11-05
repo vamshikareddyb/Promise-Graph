@@ -143,8 +143,8 @@ class Phase2WorkflowTest {
         assertThat(stack.scheduler.schedule(absence)).isTrue();
         assertThat(stack.scheduler.schedule(absence)).isFalse(); // the same absence twice starts one handoff
 
-        // Three days before: the plan asks Nikhil (same role) and tells Karan.
-        env.sleep(Duration.ofDays(3));
+        // As soon as the leave is known: the plan asks Nikhil (same role) and tells Karan.
+        env.sleep(Duration.ofMinutes(5));
         HandoffWorkflow handoff = client.newWorkflowStub(HandoffWorkflow.class, "handoff-" + absence.handoffId());
         assertThat(handoff.state().status()).isEqualTo("awaiting_cover");
         InboxItem ask = openItem("nikhil", "Can you cover \"write the launch FAQ for support\"");
@@ -156,7 +156,7 @@ class Phase2WorkflowTest {
         assertThat(handoff.state().status()).isEqualTo("covered");
 
         // First day away: the promise moves to Nikhil.
-        env.sleep(Duration.ofDays(3));
+        env.sleep(Duration.ofDays(6));
         assertThat(handoff.state().status()).isEqualTo("active");
         assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
         assertThat(openItem("nikhil", "You now own the promise to write the launch FAQ")).isNotNull();
@@ -188,5 +188,47 @@ class Phase2WorkflowTest {
         click(openItem("zoya", "Can you cover"), "accept", "zoya", null);
         env.sleep(Duration.ofDays(3));
         assertThat(promiseWf("faq").state().owner()).isEqualTo("zoya");
+    }
+
+    @Test
+    void shortNoticeLeaveStillMovesOnceTheCoverAnswers() {
+        track("faq", "karan", "write the launch FAQ for support", 12);
+        Absence absence = new Absence("demo", "karan", inDays(1), inDays(9), "leave", "test");
+        stack.scheduler.schedule(absence);
+        env.sleep(Duration.ofMinutes(5));
+        InboxItem ask = openItem("nikhil", "Can you cover \"write the launch FAQ for support\"");
+
+        // The leave starts before Nikhil answers: the lead is told he hasn't answered yet.
+        env.sleep(Duration.ofDays(2));
+        HandoffWorkflow handoff = client.newWorkflowStub(HandoffWorkflow.class, "handoff-" + absence.handoffId());
+        assertThat(handoff.state().status()).isEqualTo("active");
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("karan");
+        assertThat(openItem("aditi", "nikhil hasn't answered yet")).isNotNull();
+
+        // He accepts late: it moves to him straight away.
+        click(ask, "accept", "nikhil", null);
+        env.sleep(Duration.ofMinutes(1));
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
+    }
+
+    @Test
+    void promisesMadeAfterTheLeaveWasPlannedAreCoveredToo() {
+        track("faq", "karan", "write the launch FAQ for support", 30);
+        Absence absence = new Absence("demo", "karan", inDays(10), inDays(14), "leave", "test");
+        stack.scheduler.schedule(absence);
+        env.sleep(Duration.ofMinutes(5));
+        click(openItem("nikhil", "Can you cover \"write the launch FAQ"), "accept", "nikhil", null);
+
+        env.sleep(Duration.ofDays(2));
+        track("notes", "karan", "send the release notes", 20); // made after the plan
+
+        env.sleep(Duration.ofDays(9)); // the leave has started
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
+        String cover = client.newWorkflowStub(HandoffWorkflow.class, "handoff-" + absence.handoffId()).state().items().stream()
+                .filter(i -> i.promiseId().equals("notes")).findFirst().orElseThrow().proposedOwner();
+        assertThat(cover).isNotNull().isNotEqualTo("karan");
+        click(openItem(cover, "Can you cover \"send the release notes"), "accept", cover, null);
+        env.sleep(Duration.ofMinutes(1));
+        assertThat(promiseWf("notes").state().owner()).isEqualTo(cover);
     }
 }

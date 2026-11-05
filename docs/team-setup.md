@@ -68,7 +68,7 @@ Everyone who signs in appears on the **People** tab. An admin sets each person's
 
 | Someone writes | What happens |
 | --- | --- |
-| "I'm on leave from 16 Nov to 27 Nov" | 3 days before, cover is planned from their team and asked. On 16 Nov, accepted promises move to the cover, noted "Covering for Neha while they're on leave (16–27 Nov)". On 28 Nov they move back. |
+| "I'm on leave from 16 Nov to 27 Nov" | Straight away, cover is planned from their team and asked (promises made later are added on the first day away). On 16 Nov, accepted promises move to the cover, and a cover who answers late takes over as soon as they accept, noted "Covering for Neha while they're on leave (16–27 Nov)". On 28 Nov they move back. |
 | "My last day is 20 Nov" / "I'll be leaving the team on 28 Nov" / "I've resigned; my notice period ends on 30 Nov" | Their **lead approves** the handover plan first (inbox or Handoffs page), and can change who takes what. After approval the new owners are asked. The day after the last day, promises move **for good**, noted "Taken over from Neha, who left on 21 Nov". |
 
 Only the sender's own announcement counts ("Neha's last day is Friday" from someone else doesn't),

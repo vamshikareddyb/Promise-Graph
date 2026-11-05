@@ -279,7 +279,7 @@ async function renderHandoffs() {
         ? `<select data-h="${esc(h.id)}" data-p="${esc(i.promiseId)}"><option value="">Ask someone…</option>${peopleOpt}</select>` : ''}</td></tr>`;
   $view.innerHTML = `
     <h2>Handoffs</h2>
-    <p class="lead">Who takes over what when someone is away or leaves. Leave: work moves on the first day away and back the day after.
+    <p class="lead">Who takes over what when someone is away or leaves. Leave: cover is asked as soon as it's entered, work moves on the first day away and back the day after.
       Leaving the company: their lead approves the plan, and work moves for good after their last day.</p>
     <div class="card"><b>Plan an absence</b><div class="row">
       <select id="ap">${peopleOpt}</select> from <input type="date" id="as"> to <input type="date" id="ae">
@@ -292,7 +292,7 @@ async function renderHandoffs() {
       ${h.items.length ? `<table style="margin-top:10px"><thead><tr><th>Promise</th><th>Cover</th><th>State</th><th></th></tr></thead>
         <tbody>${h.items.map(i => item(h, i)).join('')}</tbody></table>`
         : `<div class="meta">${mine && h.status === 'scheduled'
-          ? `Nothing to do for now. On ${esc(planDay(h.startsOn))}, cover for your open promises is picked from your team and they're asked to take them over${h.endsOn ? '; everything comes back to you the day after you return' : ''}.`
+          ? `You have no open promises right now, so there's nothing to hand over. Promises you make before you go get cover on ${esc(planDay(h.startsOn))}${h.endsOn ? ', and come back to you the day after you return' : ''}.`
           : 'Nothing planned yet.'}</div>`}
       ${h.status === 'awaiting_approval' && !mine ? `<div class="row"><button class="act primary" data-approve="${esc(h.id)}">Approve handover plan</button>
         <span class="meta">As their lead: check who takes what above, then approve. Nothing moves before that.</span></div>` : ''}
