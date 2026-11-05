@@ -47,8 +47,28 @@ public final class EmailText {
             }
             kept.add(line);
         }
-        String joined = String.join("\n", kept).replaceAll("\n{3,}", "\n\n").strip();
+        String joined = String.join("\n", unwrap(kept)).replaceAll("\n{3,}", "\n\n").strip();
         return joined.length() > MAX_LENGTH ? joined.substring(0, MAX_LENGTH) : joined;
+    }
+
+    /** Gmail's plain-text part wraps lines at about 76 characters. Wrapped lines are long and the next starts mid-sentence. */
+    static final int WRAP_WIDTH = 60;
+
+    /** Joins lines that plain-text wrapping split mid-sentence, so a sentence reads as one. */
+    static List<String> unwrap(List<String> lines) {
+        List<String> out = new ArrayList<>();
+        for (String line : lines) {
+            if (!out.isEmpty() && !line.isEmpty()) {
+                String prev = out.get(out.size() - 1);
+                char first = line.charAt(0);
+                if (prev.length() >= WRAP_WIDTH && !prev.matches(".*[.!?:]$") && (Character.isLowerCase(first) || Character.isDigit(first))) {
+                    out.set(out.size() - 1, prev + " " + line);
+                    continue;
+                }
+            }
+            out.add(line);
+        }
+        return out;
     }
 
     static String htmlToText(String html) {
