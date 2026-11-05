@@ -161,11 +161,13 @@ public final class Visibility {
      * anyone else, only the items they were asked to cover; nothing otherwise.
      */
     public Optional<HandoffRecord> view(String viewer, HandoffRecord h) {
-        if (ownsMailbox(viewer) || viewer.equals(h.person()) || isLeadOf(viewer, h.person())) {
+        if (ownsMailbox(viewer) || viewer.equals(h.person()) || isLeadOf(viewer, h.person()) || (strict && canOperate(viewer))) {
             return Optional.of(h);
         }
+        // Teammates see only what is theirs, and nothing while the lead is still deciding.
+        boolean deciding = "awaiting_approval".equals(h.status());
         List<HandoffRecord.ItemState> mine = h.items().stream()
-                .filter(i -> viewer.equals(i.proposedOwner()) || viewer.equals(i.acceptedOwner())).toList();
+                .filter(i -> viewer.equals(i.acceptedOwner()) || (!deciding && viewer.equals(i.proposedOwner()))).toList();
         if (mine.isEmpty()) {
             return Optional.empty();
         }

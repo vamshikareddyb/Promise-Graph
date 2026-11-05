@@ -59,8 +59,8 @@ Everyone who signs in appears on the **People** tab. An admin sets each person's
 
 - **Team:** cover is only suggested from the same team. People with no team can't cover anyone.
 - **Role:** the same role is preferred, then the lightest workload.
-- **Lead:** the lead approves the plan when someone in their team leaves the company, and is asked
-  when nobody can cover.
+- **Lead:** when someone in their team takes leave or leaves the company, the lead sees all their
+  open promises, assigns each one to a teammate and approves. A lead's own leave goes to an admin.
 - **Admin:** admins edit this page and see the Ops page.
 - **Active:** untick it once someone has left, so they're no longer suggested as cover.
 
@@ -68,8 +68,8 @@ Everyone who signs in appears on the **People** tab. An admin sets each person's
 
 | Someone writes | What happens |
 | --- | --- |
-| "I'm on leave from 16 Nov to 27 Nov" | 3 days before, cover is planned from their team and asked. On 16 Nov, accepted promises move to the cover, noted "Covering for Neha while they're on leave (16–27 Nov)". On 28 Nov they move back. |
-| "My last day is 20 Nov" / "I'll be leaving the team on 28 Nov" / "I've resigned; my notice period ends on 30 Nov" | Their **lead approves** the handover plan first (inbox or Handoffs page), and can change who takes what. After approval the new owners are asked. The day after the last day, promises move **for good**, noted "Taken over from Neha, who left on 21 Nov". |
+| "I'm on leave from 16 Nov to 27 Nov" | Straight away, their **lead** sees every open promise (with a suggested teammate for each), changes who takes what on the Handoffs page and approves. Teammates get nothing before that. After approval each new owner is told; on 16 Nov the promises move to them, noted "Covering for Neha while they're on leave (16–27 Nov)". On 28 Nov they move back. Promises made after approval go to the lead to assign. |
+| "My last day is 20 Nov" / "I'll be leaving the team on 28 Nov" / "I've resigned; my notice period ends on 30 Nov" | The same: the **lead assigns and approves**. The day after the last day, promises move **for good**, noted "Taken over from Neha, who left on 21 Nov". |
 
 Only the sender's own announcement counts ("Neha's last day is Friday" from someone else doesn't),
 and a departure needs a date. A lead or the person can also plan either one by hand on the Handoffs

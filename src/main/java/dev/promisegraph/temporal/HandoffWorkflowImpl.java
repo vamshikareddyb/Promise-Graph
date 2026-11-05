@@ -35,6 +35,15 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
 
     /** Departures wait for the lead to approve the plan; handoffs recorded before this replay without it. */
     static final String DEPARTURE_APPROVAL = "departure-approval";
+    /** Plan and ask for cover as soon as the absence is known, and pick up promises made since at the start. */
+    static final String PLAN_ON_APPLY = "plan-on-apply";
+    /** A cover who answers after the absence started still takes the promise over. */
+    static final String LATE_ACCEPT = "late-accept";
+    /**
+     * Leave and departures alike: the lead (or an admin) assigns every promise and approves, and the
+     * promises then simply become the new owners'; nobody is asked to accept.
+     */
+    static final String LEAD_ASSIGNS = "lead-assigns";
 
     /** Handoff moments happen at 09:30 India time (04:00 UTC), like reminders. */
     static final LocalTime HANDOFF_TIME_UTC = LocalTime.of(4, 0);
@@ -59,8 +68,10 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
     private String planner;
     private boolean cancelled;
     private boolean live; // after the absence starts, an accepted promise moves at once
+    private boolean lateAccept;
     private boolean departure; // leaving for good: the lead approves first, and nothing comes back
     private boolean approved = true; // only a departure starts unapproved
+    private boolean leadMode; // the lead assigns; see LEAD_ASSIGNS
 
     @Override
     public void respond(HandoffResponse response) {
@@ -92,20 +103,26 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                 absence.endsOn(), absence.reason(), "scheduled", null, List.of(), now().toString());
         save("scheduled");
 
-        waitUntil(prepAt);
-        if (cancelled) {
-            return finishCancelled();
+        boolean planEarly = Workflow.getVersion(PLAN_ON_APPLY, Workflow.DEFAULT_VERSION, 1) >= 1;
+        if (!planEarly) {
+            waitUntil(prepAt);
+            if (cancelled) {
+                return finishCancelled();
+            }
         }
 
-        // 1. Plan who covers what.
+        // 1. Plan who covers what: as soon as the absence is known (it used to wait until a few days before).
         save("planning");
-        HandoffPlanning.Plan plan = planning.planHandoff(new PlanRequest(absence.tenant(), absence.handoffId(),
-                absence.person(), absence.startsOn(), absence.endsOn()));
-        planner = plan.planner();
-        decider = plan.decider();
-        for (HandoffPlanning.Item i : plan.items()) {
-            items.put(i.promiseId(), new ItemState(i.promiseId(), i.what(), i.due(), i.brief(), i.proposedOwner(), null,
-                    i.proposedOwner() == null ? "needs_owner" : "proposed", i.reason()));
+        plan();
+        if (items.isEmpty() && planEarly && now().isBefore(prepAt)) {
+            // Nothing open yet: look again a few days before, in case new promises were made.
+            save("scheduled");
+            waitUntil(prepAt);
+            if (cancelled) {
+                return finishCancelled();
+            }
+            save("planning");
+            plan();
         }
         if (items.isEmpty()) {
             save("nothing_to_hand_over");
@@ -114,8 +131,20 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             return state.status();
         }
 
-        // 1b. Someone leaving the company: their lead approves the plan before anyone is asked.
         Instant transferAt = startAt;
+        leadMode = Workflow.getVersion(LEAD_ASSIGNS, Workflow.DEFAULT_VERSION, 1) >= 1;
+        if (leadMode) {
+            // 1-3. The lead assigns every promise and approves; then they're the new owners'.
+            departure = returnAt == null;
+            String ended = leadAssigns(startAt, returnAt);
+            if (ended != null) {
+                return ended;
+            }
+            if (!now().isBefore(startAt)) {
+                transferAt = now(); // approved after the start: move at once
+            }
+        } else {
+        // 1b. Someone leaving the company: their lead approves the plan before anyone is asked.
         departure = returnAt == null && Workflow.getVersion(DEPARTURE_APPROVAL, Workflow.DEFAULT_VERSION, 1) >= 1;
         if (departure) {
             approved = false;
@@ -177,10 +206,25 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                 }
             }
         }
+        }
         waitUntil(transferAt);
         if (cancelled) {
             return finishCancelled();
         }
+        if (planEarly) {
+            // Promises made since the plan was drawn up need cover too (in lead mode, the lead is told below).
+            for (ItemState i : plan()) {
+                if (leadMode) {
+                    continue;
+                }
+                if (i.proposedOwner() != null) {
+                    askCover(i, "ask");
+                } else {
+                    escalate(i, "plan");
+                }
+            }
+        }
+        lateAccept = Workflow.getVersion(LATE_ACCEPT, Workflow.DEFAULT_VERSION, 1) >= 1;
 
         // 4. The absence starts: move every accepted promise to its cover.
         Map<String, String> owners = new LinkedHashMap<>();
@@ -193,9 +237,16 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             } else if ("accepted".equals(i.state())) {
                 items.put(i.promiseId(), i.withState("closed")); // kept or cancelled before the absence
             } else {
+                boolean waiting = lateAccept && !leadMode && "proposed".equals(i.state());
                 items.put(i.promiseId(), i.withState("uncovered"));
-                notify(decider, "Nobody is covering \"" + i.what() + "\" while " + absence.person() + " is away "
-                        + window() + ". Choose someone on the Handoffs page.", List.of(), i.promiseId(), "uncovered", i.promiseId());
+                notify(decider, leadMode
+                        ? "\"" + i.what() + "\" (" + absence.person() + "'s) isn't assigned to anyone " + (departure ? "now that they've left" : "while they're away " + window())
+                                + (i.proposedOwner() == null ? "" : "; suggested: " + i.proposedOwner()) + ". Assign it on the Handoffs page."
+                        : waiting
+                        ? i.proposedOwner() + " hasn't answered yet about covering \"" + i.what() + "\" for " + absence.person() + " ("
+                                + window() + "). It moves to them as soon as they accept, or choose someone else on the Handoffs page."
+                        : "Nobody is covering \"" + i.what() + "\" while " + absence.person() + " is away "
+                                + window() + ". Choose someone on the Handoffs page.", List.of(), i.promiseId(), "uncovered", i.promiseId());
             }
         }
         live = true;
@@ -255,9 +306,11 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                 continue;
             }
             if ("approve plan".equals(r.kind())) {
-                if (!approved && r.by() != null && r.by().equals(decider)) {
+                if (!approved && mayDecide(r.by())) {
                     approved = true;
-                    notify(absence.person(), r.by() + " approved the handover of your open promises.", List.of(), null, "approved");
+                    if (!leadMode) {
+                        notify(absence.person(), r.by() + " approved the handover of your open promises.", List.of(), null, "approved");
+                    }
                     changed = true;
                 }
                 continue;
@@ -269,7 +322,8 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
             }
             switch (r.kind()) {
                 case "accept" -> {
-                    if ("proposed".equals(i.state()) && r.by().equals(i.proposedOwner())) {
+                    boolean late = lateAccept && "uncovered".equals(i.state()) && i.acceptedOwner() == null;
+                    if (("proposed".equals(i.state()) || late) && r.by().equals(i.proposedOwner())) {
                         items.put(i.promiseId(), i.accepted(r.by()));
                         notify(absence.person(), r.by() + " will cover \"" + i.what() + "\" while you're away.",
                                 List.of(), i.promiseId(), "accepted", i.promiseId());
@@ -289,10 +343,15 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
                 }
                 case "assign" -> {
                     boolean open = "proposed".equals(i.state()) || "needs_owner".equals(i.state()) || "uncovered".equals(i.state());
-                    if (open && r.owner() != null && !r.owner().isBlank() && !r.owner().equals(absence.person())) {
+                    if (open && r.owner() != null && !r.owner().isBlank() && !r.owner().equals(absence.person())
+                            && (!leadMode || mayDecide(r.by()))) {
                         ItemState next = i.withProposal(r.owner(), "chosen by " + r.by());
                         items.put(i.promiseId(), next);
-                        if (approved) {
+                        if (leadMode) {
+                            if (approved) {
+                                assignTo(next, "assigned-" + r.sourceId()); // after approval, the lead's choice is final
+                            }
+                        } else if (approved) {
                             askCover(next, "assign-" + r.sourceId()); // before approval, only the plan changes
                         }
                         changed = true;
@@ -304,6 +363,105 @@ public class HandoffWorkflowImpl implements HandoffWorkflow {
         if (changed) {
             save(state.status().equals("awaiting_cover") && allAccepted() ? "covered" : state.status());
         }
+    }
+
+    /**
+     * Lead mode, steps 1-3: the lead sees every open promise (with suggestions) on the Handoffs page,
+     * changes who takes what, and approves. Returns a final status if the handoff ended instead.
+     */
+    private String leadAssigns(Instant startAt, Instant returnAt) {
+        approved = false;
+        save("awaiting_approval");
+        List<String> plan1 = new ArrayList<>();
+        for (ItemState i : items.values()) {
+            plan1.add(i.what() + (i.due() == null ? "" : " (due " + i.due() + ")") + " → "
+                    + (i.proposedOwner() == null ? "nobody suggested" : "suggested: " + i.proposedOwner()));
+        }
+        notifyPlan(decider, absence.person() + (departure ? " is leaving: their last day is " + lastDay() : " is on leave " + window()) + ". "
+                + "Assign their " + items.size() + (items.size() == 1 ? " open promise" : " open promises") + " to teammates: "
+                + String.join("; ", plan1) + ". Change who takes what on the Handoffs page, then approve. Nobody gets anything before that.",
+                "approval");
+        if (!absence.person().equals(decider)) {
+            notify(absence.person(), "Your " + items.size() + (items.size() == 1 ? " open promise goes" : " open promises go") + " to "
+                    + decider + " to assign to teammates " + (departure ? "before you leave" : "while you're away " + window())
+                    + ". You'll be told who takes what.", List.of(), null, "plan");
+        }
+        boolean late = false;
+        while (!approved && !cancelled) {
+            waitUntil(late ? returnAt : startAt);
+            if (approved || cancelled) {
+                break;
+            }
+            if (!late) {
+                late = true; // the absence started with nothing approved: say so once
+                notifyPlan(decider, absence.person() + (departure ? " has left" : "'s leave has started") + " and their " + items.size()
+                        + " open promise(s) aren't assigned yet. Assign them on the Handoffs page.", "late");
+            } else if (returnAt != null && !now().isBefore(returnAt)) {
+                for (ItemState i : List.copyOf(items.values())) {
+                    items.put(i.promiseId(), i.withState("closed"));
+                }
+                save("not_assigned"); // the leave ended before anything was assigned: nothing to move back
+                return state.status();
+            }
+        }
+        if (cancelled) {
+            return finishCancelled();
+        }
+        List<String> lines = new ArrayList<>();
+        for (ItemState i : List.copyOf(items.values())) {
+            if (i.proposedOwner() != null) {
+                assignTo(i, "assigned");
+                lines.add(i.what() + " → " + i.proposedOwner());
+            } else {
+                lines.add(i.what() + " → stays with you for now");
+            }
+        }
+        notify(absence.person(), decider + " assigned your open promises: " + String.join("; ", lines) + ".", List.of(), null, "assigned");
+        save(allAccepted() ? "covered" : "awaiting_cover");
+        return null;
+    }
+
+    /** Lead mode: the promise is the new owner's (it moves at the start, or now if that has passed). */
+    private void assignTo(ItemState i, String why) {
+        String owner = i.proposedOwner();
+        items.put(i.promiseId(), i.accepted(owner));
+        String due = i.due() == null ? "" : " (due " + i.due() + ")";
+        String when = live ? "It's yours from now" : "It becomes yours on " + absence.startsOn();
+        notify(owner, decider + " assigned you \"" + i.what() + "\"" + due + " from " + absence.person()
+                + (departure ? ", who is leaving (last day " + lastDay() + "). " + when + ", for good. "
+                        : " while they're away " + window() + ". " + when + ", and it goes back to them afterwards. ")
+                + i.brief(), List.of(), i.promiseId(), why, i.promiseId(), owner);
+        if (live) {
+            moveNow(items.get(i.promiseId()));
+        }
+    }
+
+    /** Lead mode: the lead or an admin decides, never the person away (unless nobody else can). */
+    private boolean mayDecide(String by) {
+        if (by == null) {
+            return false;
+        }
+        return by.equals(decider) || (leadMode && !by.equals(absence.person()));
+    }
+
+    /** Plans cover for the person's open promises not planned yet; returns the new items. */
+    private List<ItemState> plan() {
+        HandoffPlanning.Plan plan = planning.planHandoff(new PlanRequest(absence.tenant(), absence.handoffId(),
+                absence.person(), absence.startsOn(), absence.endsOn()));
+        if (planner == null) {
+            planner = plan.planner();
+            decider = plan.decider();
+        }
+        List<ItemState> added = new ArrayList<>();
+        for (HandoffPlanning.Item i : plan.items()) {
+            if (!items.containsKey(i.promiseId())) {
+                ItemState item = new ItemState(i.promiseId(), i.what(), i.due(), i.brief(), i.proposedOwner(), null,
+                        i.proposedOwner() == null ? "needs_owner" : "proposed", i.reason());
+                items.put(i.promiseId(), item);
+                added.add(item);
+            }
+        }
+        return added;
     }
 
     private boolean allAccepted() {

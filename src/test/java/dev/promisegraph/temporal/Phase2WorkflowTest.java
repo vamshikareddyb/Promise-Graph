@@ -134,8 +134,17 @@ class Phase2WorkflowTest {
         assertThat(stack.handoffs.getHandoff("demo", "demo-karan-" + start)).get().extracting(HandoffRecord::status).isEqualTo("scheduled");
     }
 
+    private HandoffWorkflow handoff(Absence a) {
+        return client.newWorkflowStub(HandoffWorkflow.class, "handoff-" + a.handoffId());
+    }
+
+    private void approve(String lead) {
+        click(openItem(lead, "Change who takes what on the Handoffs page, then approve"), "approve plan", lead, null);
+        env.sleep(Duration.ofMinutes(1));
+    }
+
     @Test
-    void handoffCoversPromisesAndHandsThemBack() {
+    void theLeadAssignsThenPromisesMoveAndComeBack() {
         track("faq", "karan", "write the launch FAQ for support", 12);
         String start = inDays(5);
         String end = inDays(9);
@@ -143,50 +152,89 @@ class Phase2WorkflowTest {
         assertThat(stack.scheduler.schedule(absence)).isTrue();
         assertThat(stack.scheduler.schedule(absence)).isFalse(); // the same absence twice starts one handoff
 
-        // Three days before: the plan asks Nikhil (same role) and tells Karan.
-        env.sleep(Duration.ofDays(3));
-        HandoffWorkflow handoff = client.newWorkflowStub(HandoffWorkflow.class, "handoff-" + absence.handoffId());
-        assertThat(handoff.state().status()).isEqualTo("awaiting_cover");
-        InboxItem ask = openItem("nikhil", "Can you cover \"write the launch FAQ for support\"");
-        assertThat(ask.actions()).containsExactly("accept", "decline");
-        assertThat(openItem("karan", "1 promise needs cover").text()).contains("nikhil");
+        // As soon as the leave is known, Karan's lead (Aditi) sees every open promise, with a suggestion.
+        env.sleep(Duration.ofMinutes(5));
+        assertThat(handoff(absence).state().status()).isEqualTo("awaiting_approval");
+        InboxItem plan = openItem("aditi", "karan is on leave from " + start + " to " + end);
+        assertThat(plan.actions()).containsExactly("approve plan");
+        assertThat(plan.text()).contains("write the launch FAQ for support (due " + inDays(12) + ") → suggested: nikhil");
+        assertThat(openItem("karan", "to aditi to assign")).isNotNull();
+        assertThat(stack.inbox.inbox("demo", "nikhil", false)).isEmpty(); // nobody gets anything before approval
 
-        click(ask, "accept", "nikhil", null);
+        // Karan can't approve his own handover.
+        handoff(absence).respond(new Contracts.HandoffResponse("approve plan", "plan", "karan", null, "web:approve-karan"));
         env.sleep(Duration.ofMinutes(1));
-        assertThat(handoff.state().status()).isEqualTo("covered");
+        assertThat(handoff(absence).state().status()).isEqualTo("awaiting_approval");
 
-        // First day away: the promise moves to Nikhil.
-        env.sleep(Duration.ofDays(3));
-        assertThat(handoff.state().status()).isEqualTo("active");
+        approve("aditi");
+        assertThat(handoff(absence).state().status()).isEqualTo("covered");
+        assertThat(openItem("nikhil", "aditi assigned you \"write the launch FAQ for support\"").actions()).isEmpty();
+        assertThat(openItem("karan", "aditi assigned your open promises").text()).contains("→ nikhil");
+
+        // First day away: the promise moves to Nikhil, no answer needed.
+        env.sleep(Duration.ofDays(6));
+        assertThat(handoff(absence).state().status()).isEqualTo("active");
         assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
-        assertThat(openItem("nikhil", "You now own the promise to write the launch FAQ")).isNotNull();
 
         // The day after the absence: it moves back, with a summary.
         env.sleep(Duration.ofDays(6));
-        assertThat(handoff.state().status()).isEqualTo("returned");
+        assertThat(handoff(absence).state().status()).isEqualTo("returned");
         assertThat(promiseWf("faq").state().owner()).isEqualTo("karan");
         assertThat(openItem("karan", "Welcome back").text()).contains("covered by nikhil");
-        assertThat(stack.handoffs.getHandoff("demo", absence.handoffId())).get()
-                .satisfies(h -> assertThat(h.items()).singleElement().extracting(HandoffRecord.ItemState::state).isEqualTo("returned"));
     }
 
     @Test
-    void declinedCoverGoesToTheLeadWhoAssignsSomeoneElse() {
+    void theLeadCanChangeWhoTakesWhatBeforeApproving() {
         track("faq", "karan", "write the launch FAQ for support", 12);
         Absence absence = new Absence("demo", "karan", inDays(5), inDays(9), "leave", "test");
         stack.scheduler.schedule(absence);
-        env.sleep(Duration.ofDays(3));
+        env.sleep(Duration.ofMinutes(5));
 
-        click(openItem("nikhil", "Can you cover"), "decline", "nikhil", null);
+        handoff(absence).respond(new Contracts.HandoffResponse("assign", "faq", "karan", "omar", "web:faq:omar")); // not his call
+        handoff(absence).respond(new Contracts.HandoffResponse("assign", "faq", "aditi", "zoya", "web:faq:zoya"));
         env.sleep(Duration.ofMinutes(1));
-        assertThat(openItem("aditi", "Nobody is lined up to cover")).isNotNull();
-
-        // The lead chooses someone on the Handoffs page, which sends an assign response.
-        client.newWorkflowStub(HandoffWorkflow.class, "handoff-" + absence.handoffId())
-                .respond(new Contracts.HandoffResponse("assign", "faq", "aditi", "zoya", "web:faq:zoya"));
-        env.sleep(Duration.ofMinutes(1));
-        click(openItem("zoya", "Can you cover"), "accept", "zoya", null);
-        env.sleep(Duration.ofDays(3));
+        approve("aditi");
+        assertThat(openItem("zoya", "aditi assigned you")).isNotNull();
+        assertThat(stack.inbox.inbox("demo", "nikhil", false)).isEmpty();
+        env.sleep(Duration.ofDays(6));
         assertThat(promiseWf("faq").state().owner()).isEqualTo("zoya");
+    }
+
+    @Test
+    void approvedAfterTheStartMovesAtOnce() {
+        track("faq", "karan", "write the launch FAQ for support", 12);
+        Absence absence = new Absence("demo", "karan", inDays(1), inDays(9), "leave", "test");
+        stack.scheduler.schedule(absence);
+
+        env.sleep(Duration.ofDays(2));
+        assertThat(handoff(absence).state().status()).isEqualTo("awaiting_approval");
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("karan");
+        assertThat(openItem("aditi", "karan's leave has started")).isNotNull();
+
+        approve("aditi");
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
+        assertThat(handoff(absence).state().status()).isEqualTo("active");
+    }
+
+    @Test
+    void promisesMadeAfterApprovalGoToTheLeadToAssign() {
+        track("faq", "karan", "write the launch FAQ for support", 30);
+        Absence absence = new Absence("demo", "karan", inDays(10), inDays(14), "leave", "test");
+        stack.scheduler.schedule(absence);
+        env.sleep(Duration.ofMinutes(5));
+        approve("aditi");
+
+        env.sleep(Duration.ofDays(2));
+        track("notes", "karan", "send the release notes", 20); // made after the plan
+
+        env.sleep(Duration.ofDays(9)); // the leave has started
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
+        assertThat(promiseWf("notes").state().owner()).isEqualTo("karan");
+        assertThat(openItem("aditi", "\"send the release notes\" (karan's) isn't assigned")).isNotNull();
+
+        handoff(absence).respond(new Contracts.HandoffResponse("assign", "notes", "aditi", "zoya", "web:notes:zoya"));
+        env.sleep(Duration.ofMinutes(1));
+        assertThat(promiseWf("notes").state().owner()).isEqualTo("zoya");
+        assertThat(openItem("zoya", "It's yours from now")).isNotNull();
     }
 }
