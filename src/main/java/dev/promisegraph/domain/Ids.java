@@ -51,6 +51,11 @@ public final class Ids {
         return "extract-" + tenant + "-" + digest(16, parts.toArray(String[]::new));
     }
 
+    /** A short stable tag for a value, e.g. a mailbox in message IDs. */
+    public static String hash(String value) {
+        return digest(10, value.toLowerCase(Locale.ROOT));
+    }
+
     public static String notificationKey(String... parts) {
         return digest(24, parts);
     }

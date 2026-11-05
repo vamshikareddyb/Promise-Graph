@@ -195,3 +195,35 @@ promise closes right after starting its ripple, so the ripple always outlived it
 load the time-skipping test server stalled on those orphaned children. Promise workflows started
 before Phase 4 keep the child path through `getVersion("ripple-on-slip", …)` version 1.
 
+## 29. Team mode: Google sign-in, and the server decides who is viewing
+
+With `PG_AUTH=google`, people sign in with Google: one consent covers who they are and read-only
+Gmail, so signing in also starts reading their mailbox. The viewer comes from the session. A filter
+replaces the `X-PG-Viewer` header with the signed-in user, so the API code and its visibility rules
+stay the same in both modes while the header can no longer be forged. Refresh tokens are stored
+encrypted (AES-256-GCM) with a key from `PG_SECRET_KEY` or a private key file.
+
+## 30. Strict visibility in team mode
+
+Each person sees promises they own, promises made to them, and promises found in their own mailbox.
+Leads don't see their team's promises; they see a handover or a recovery plan only when they have to
+approve it. The People page (names and teams) is visible to everyone signed in, because choosing
+cover needs it.
+
+## 31. One mailbox per person, and the mailbox travels with the message
+
+Each signed-in person has their own Gmail sync workflow. The mailbox is part of each message's ID
+(the same email in the sender's and the recipient's mailbox is read once for each of them) and of
+its channel, so later steps know whose mailbox "you" is: a request emailed to Neha becomes Neha's
+promise, and a promise someone made in an email to Neha records her as its recipient. The same
+promise found in two mailboxes is merged by the existing duplicate check.
+
+## 32. Leaving the company: the lead approves, then promises move for good
+
+"My last day is 20 Nov", "I'll be leaving the team on 28 Nov" and "I've resigned…" (the sender's
+own, with a date) start a permanent handoff. Unlike leave, nobody is asked until the leaving person's
+lead approves the plan; until then the lead can change who takes what. If the last day passes
+without approval, nothing moves and the lead is told once; after a late approval, new owners get a
+day to answer. Promises move the day after the last day and never come back. The workflow change is
+behind `getVersion("departure-approval")`.
+

@@ -28,8 +28,9 @@
   .card.done { opacity: .6; }
   .meta { color: var(--muted); font-size: 13px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
-  button.act, .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 5px 12px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  [hidden] { display: none !important; }
+  button.act, a.act, .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 5px 12px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
+  button.primary, a.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
   input, select { font: inherit; font-size: 14px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -40,6 +41,11 @@
   .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled, .s-awaiting_approval, .s-applying { color: var(--warn); }
   .s-broken, .s-rejected, .s-uncovered, .s-cancelled, .s-failed, .s-unresolved { color: var(--bad); }
   .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over, .s-expired, .s-superseded, .s-dismissed { color: var(--muted); }
+  .note { margin-top: 4px; font-size: 13px; color: var(--warn); }
+  .signin { max-width: 440px; margin: 60px auto; text-align: center; }
+  .signin a.act { display: inline-block; text-decoration: none; margin-top: 12px; }
+  .s-awaiting_approval { color: var(--warn); }
+  .s-handed_over { color: var(--good); }
   .plan { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
   .plan.chosen { border-color: var(--good); }
   .plan h3 { font-size: 15px; margin: 0; }
@@ -64,13 +70,15 @@
     <button data-tab="handoffs">Handoffs</button>
     <button data-tab="plans">Plans</button>
     <button data-tab="ops">Ops</button>
+    <button data-tab="team" id="teamTab" hidden>People</button>
   </nav>
   <label class="who">Viewing as <select id="person"></select></label>
+  <span class="who" id="account" hidden></span>
 </header>
 <main id="view"></main>
 
 <script>
-const state = { tab: 'inbox', person: null, people: [], showDone: false, allPromises: false };
+const state = { tab: 'inbox', person: null, people: [], showDone: false, allPromises: false, me: { mode: 'none' } };
 const $view = document.getElementById('view');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pill = s => `<span class="pill s-${esc(s)}">${esc(String(s).replace(/_/g, ' '))}</span>`;
@@ -79,7 +87,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
 
 async function api(path, opts = {}) {
-  // Until sign-in exists, the server trusts this header; it still applies every visibility rule.
+  // Demo mode: the server trusts this header. Team mode: the server ignores it and uses the signed-in user.
   const headers = { 'Content-Type': 'application/json', ...(state.person ? { 'X-PG-Viewer': state.person } : {}) };
   const res = await fetch('/api' + path, { headers, ...opts });
   const body = await res.json().catch(() => ({}));
@@ -87,6 +95,7 @@ async function api(path, opts = {}) {
   return body;
 }
 const post = (path, data) => api(path, { method: 'POST', body: JSON.stringify(data) });
+const put = (path, data) => api(path, { method: 'PUT', body: JSON.stringify(data) });
 const name = id => (state.people.find(p => p.id === id) || {}).name || id;
 
 // ------------------------------------------------------------ inbox
@@ -145,7 +154,8 @@ async function renderPromises() {
     <p class="lead">${ps.length} ${state.allPromises ? 'in total' : 'open'}, soonest due first.</p>
     <div class="toolbar"><label><input type="checkbox" id="allP" ${state.allPromises ? 'checked' : ''}> Include closed</label></div>
     ${ps.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Links</th></tr></thead><tbody>
-      ${ps.map(p => `<tr><td>${esc(p.what)}${p.latestQuote ? `<div class="meta">“${esc(p.latestQuote)}”</div>` : ''}</td>
+      ${ps.map(p => `<tr><td>${esc(p.what)}${p.latestQuote ? `<div class="meta">“${esc(p.latestQuote)}”</div>` : ''}
+        ${p.handoff ? `<div class="note">${esc(p.handoff)}</div>` : ''}${p.recipient && p.recipient !== p.owner ? `<div class="meta">for ${esc(name(p.recipient))}</div>` : ''}</td>
         <td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${pill(p.status)}</td>
         <td class="meta">${p.dependsOn.length ? 'waits on ' + p.dependsOn.length : ''}${p.dependsOn.length && p.blocks.length ? ', ' : ''}${p.blocks.length ? p.blocks.length + ' wait on it' : ''}</td></tr>`).join('')}
       </tbody></table>` : '<div class="empty">No promises yet. Send a message or connect Gmail.</div>'}`;
@@ -234,26 +244,36 @@ async function renderHandoffs() {
         ? `<select data-h="${esc(h.id)}" data-p="${esc(i.promiseId)}"><option value="">Ask someone…</option>${peopleOpt}</select>` : ''}</td></tr>`;
   $view.innerHTML = `
     <h2>Handoffs</h2>
-    <p class="lead">Who covers what while someone is away. Plans are made a few days ahead, work moves on the first day away and back the day after.</p>
+    <p class="lead">Who takes over what when someone is away or leaves. Leave: work moves on the first day away and back the day after.
+      Leaving the company: their lead approves the plan, and work moves for good after their last day.</p>
     <div class="card"><b>Plan an absence</b><div class="row">
       <select id="ap">${peopleOpt}</select> from <input type="date" id="as"> to <input type="date" id="ae">
+      <label><input type="checkbox" id="aleave"> leaving the company (no end date)</label>
       <button class="act primary" id="addAbs">Plan cover</button><span class="err" id="absErr"></span></div></div>
     ${hs.length ? hs.map(h => `<div class="card">
-      <div><b>${esc(name(h.person))}</b> away ${esc(h.startsOn)}${h.endsOn ? ' to ' + esc(h.endsOn) : ' (leaving)'} ${pill(h.status)}
+      <div><b>${esc(name(h.person))}</b> ${h.endsOn ? 'away ' + esc(h.startsOn) + ' to ' + esc(h.endsOn) : 'leaving the company (from ' + esc(h.startsOn) + ', for good)'} ${pill(h.status)}
         ${h.planner ? `<span class="meta"> · planned by ${esc(h.planner)}</span>` : ''}</div>
       ${h.items.length ? `<table style="margin-top:10px"><thead><tr><th>Promise</th><th>Cover</th><th>State</th><th></th></tr></thead>
         <tbody>${h.items.map(i => item(h, i)).join('')}</tbody></table>` : '<div class="meta">Nothing planned yet.</div>'}
-      ${['scheduled', 'planning', 'awaiting_cover', 'covered', 'active'].includes(h.status) ? `<div class="row"><button class="act" data-cancel="${esc(h.id)}">${h.status === 'active' ? 'They are back early' : 'Cancel absence'}</button></div>` : ''}
+      ${h.status === 'awaiting_approval' && h.person !== state.person ? `<div class="row"><button class="act primary" data-approve="${esc(h.id)}">Approve handover plan</button>
+        <span class="meta">As their lead: check who takes what above, then approve. Nothing moves before that.</span></div>` : ''}
+      ${['scheduled', 'planning', 'awaiting_approval', 'awaiting_cover', 'covered', 'active'].includes(h.status) ? `<div class="row"><button class="act" data-cancel="${esc(h.id)}">${h.status === 'active' ? 'They are back early' : h.endsOn ? 'Cancel absence' : 'They are not leaving'}</button></div>` : ''}
     </div>`).join('') : '<div class="empty">No absences yet. They are detected from messages like “I’m on leave from 16 Nov to 27 Nov”, or plan one above.</div>'}`;
   if (state.person) document.getElementById('ap').value = state.person;
   document.getElementById('addAbs').onclick = async () => {
-    try { await post('/absences', { person: document.getElementById('ap').value, startsOn: document.getElementById('as').value, endsOn: document.getElementById('ae').value || null }); render(); }
+    const leaving = document.getElementById('aleave').checked;
+    try { await post('/absences', { person: document.getElementById('ap').value, startsOn: document.getElementById('as').value,
+      endsOn: leaving ? null : (document.getElementById('ae').value || null), reason: leaving ? 'departure' : 'leave' }); render(); }
     catch (e) { document.getElementById('absErr').textContent = e.message; }
   };
   $view.querySelectorAll('select[data-h]').forEach(s => s.onchange = async () => {
     if (!s.value) return;
     try { await post(`/handoffs/${encodeURIComponent(s.dataset.h)}/assign`, { promiseId: s.dataset.p, owner: s.value, by: state.person }); setTimeout(render, 600); }
     catch (e) { alertInline(s, e.message); }
+  });
+  $view.querySelectorAll('[data-approve]').forEach(b => b.onclick = async () => {
+    try { await post(`/handoffs/${encodeURIComponent(b.dataset.approve)}/approve`, {}); setTimeout(render, 600); }
+    catch (e) { alertInline(b, e.message); }
   });
   $view.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
     try { await post(`/handoffs/${encodeURIComponent(b.dataset.cancel)}/cancel`, {}); setTimeout(render, 600); }
@@ -353,8 +373,37 @@ async function renderOps() {
   $view.querySelectorAll('[data-dismiss]').forEach(b => b.onclick = async () => { try { await post(`/ops/dead-letters/${encodeURIComponent(b.dataset.dismiss)}/dismiss`, {}); render(); } catch (e) { alertInline(b, e.message); } });
 }
 
+// ------------------------------------------------------------ people (team mode)
+async function renderTeam() {
+  const ms = await api('/team');
+  const admin = state.me.admin;
+  const row = m => admin ? `<tr data-e="${esc(m.email)}"><td><input value="${esc(m.name)}" data-f="name"><div class="meta">${esc(m.email)}</div></td>
+      <td><input value="${esc(m.team)}" data-f="team" placeholder="e.g. platform"></td><td><input value="${esc(m.role)}" data-f="role" placeholder="e.g. Backend engineer"></td>
+      <td><input type="checkbox" data-f="lead" ${m.lead ? 'checked' : ''}></td><td><input type="checkbox" data-f="admin" ${m.admin ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-f="active" ${m.active ? 'checked' : ''}></td><td><button class="act" data-save>Save</button><span class="err"></span></td></tr>`
+    : `<tr><td>${esc(m.name)}<div class="meta">${esc(m.email)}</div></td><td>${esc(m.team || '—')}</td><td>${esc(m.role || '—')}</td>
+      <td>${m.lead ? 'lead' : ''}</td><td>${m.admin ? 'admin' : ''}</td><td>${m.active ? '' : 'left'}</td><td></td></tr>`;
+  $view.innerHTML = `
+    <h2>People</h2>
+    <p class="lead">Everyone who has signed in. Cover is suggested from the same team (same role first, then the lightest workload),
+      and a team's lead approves handovers when someone leaves. ${admin ? 'Fill in each person’s team, role and lead, then Save.' : 'Admins keep this list up to date.'}</p>
+    <table><thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Lead</th><th>Admin</th><th>Active</th><th></th></tr></thead>
+      <tbody>${ms.map(row).join('')}</tbody></table>
+    <p class="meta">Untick Active once someone has left, so they are no longer suggested as cover.</p>`;
+  $view.querySelectorAll('[data-save]').forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr'); const v = f => tr.querySelector(`[data-f="${f}"]`);
+    try {
+      await put(`/team/${encodeURIComponent(tr.dataset.e)}`, { name: v('name').value, team: v('team').value, role: v('role').value,
+        lead: v('lead').checked, admin: v('admin').checked, active: v('active').checked });
+      b.nextElementSibling.textContent = ''; b.textContent = 'Saved';
+      setTimeout(() => { b.textContent = 'Save'; }, 1500);
+      state.people = await api('/people');
+    } catch (e) { b.nextElementSibling.textContent = ' ' + e.message; }
+  });
+}
+
 // ------------------------------------------------------------ shell
-const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, plans: renderPlans, ops: renderOps };
+const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, plans: renderPlans, ops: renderOps, team: renderTeam };
 async function render() {
   try { await views[state.tab](); }
   catch (e) { $view.innerHTML = `<div class="empty">Could not load: ${esc(e.message)}. Is the app running?</div>`; }
@@ -365,7 +414,30 @@ document.getElementById('tabs').onclick = e => {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   render();
 };
+async function signedIn() {
+  // Team mode: who you are comes from Google, not from a dropdown.
+  const res = await fetch('/api/me');
+  state.me = await res.json().catch(() => ({ mode: 'none' }));
+  if (state.me.mode !== 'google') return true;
+  document.querySelector('label.who').hidden = true;
+  if (!state.me.signedIn) {
+    document.getElementById('tabs').hidden = true;
+    $view.innerHTML = `<div class="card signin"><h2>Promise Graph</h2>
+      <p>Sign in with your Google account. The app reads your Gmail (read-only) to find the promises you make and the
+      requests made to you, and shows you only your own.</p><a class="act primary" href="/login">Sign in with Google</a></div>`;
+    return false;
+  }
+  state.person = state.me.email;
+  const acct = document.getElementById('account');
+  acct.hidden = false;
+  acct.innerHTML = `${esc(state.me.name)} <button class="act" id="signOut">Sign out</button>`;
+  document.getElementById('signOut').onclick = async () => { await fetch('/logout', { method: 'POST' }); location.reload(); };
+  document.getElementById('teamTab').hidden = false;
+  return true;
+}
+
 async function init() {
+  if (!(await signedIn())) return;
   let peopleError = null;
   try { state.people = await api('/people'); } catch (e) { state.people = []; peopleError = e.message; }
   const sel = document.getElementById('person');
@@ -376,13 +448,15 @@ async function init() {
     return;
   }
   sel.innerHTML = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.lead ? ' (lead)' : ''}</option>`).join('');
-  state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
+  if (state.me.mode !== 'google') {
+    state.person = store.get('pg.person') && state.people.some(p => p.id === store.get('pg.person')) ? store.get('pg.person') : state.people[0]?.id;
+  }
   if (state.person) sel.value = state.person;
   // With Gmail connected the only viewer is that account, so say so instead of offering a choice.
-  if (state.people.length === 1) { document.querySelector('.who').firstChild.textContent = 'Gmail account '; sel.disabled = true; }
+  if (state.me.mode !== 'google' && state.people.length === 1) { document.querySelector('.who').firstChild.textContent = 'Gmail account '; sel.disabled = true; }
   sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); };
   const saved = store.get('pg.tab');
-  if (saved && views[saved]) document.querySelector(`#tabs [data-tab="${saved}"]`).click(); else render();
+  if (saved && views[saved] && !document.querySelector(`#tabs [data-tab="${saved}"]`).hidden) document.querySelector(`#tabs [data-tab="${saved}"]`).click(); else render();
   setInterval(() => { if (!$view.querySelector('input:focus, select:focus')) render(); }, 10000);
 }
 init();

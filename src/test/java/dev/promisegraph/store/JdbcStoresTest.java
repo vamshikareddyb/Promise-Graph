@@ -62,6 +62,8 @@ class JdbcStoresTest {
             ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/003_phase3.sql"));
             ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/004_phase4.sql"));
             ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/004_phase4.sql"));
+            ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/005_team.sql"));
+            ScriptUtils.executeSqlScript(c, new FileSystemResource("migrations/005_team.sql"));
         }
         jdbc = new NamedParameterJdbcTemplate(ds);
     }
@@ -216,5 +218,23 @@ class JdbcStoresTest {
         audit.record(new AuditEntry("demo", "2026-11-02T06:00:00Z", "meera", "negotiation:approve B", "api-v3", null));
         assertThat(audit.recent("demo", 10)).extracting(AuditEntry::actor).containsExactly("meera", "ravi");
         assertThat(audit.recent("demo", 1)).hasSize(1);
+    }
+
+    @Test
+    void teamMembersAndSignInsRoundTrip() {
+        var store = new dev.promisegraph.team.JdbcTeamStore(jdbc);
+        var first = store.addIfAbsent(new dev.promisegraph.team.Member("demo", "Neha@X.com", "Neha", "", "", false, true, true, T0));
+        assertThat(first.email()).isEqualTo("neha@x.com");
+        // Signing in again doesn't overwrite what an admin set.
+        store.update(first.edited("Neha K", "platform", "Engineer", false, true, true));
+        store.addIfAbsent(new dev.promisegraph.team.Member("demo", "neha@x.com", "Someone", "", "", false, false, true, T0));
+        assertThat(store.member("demo", "NEHA@x.com")).get().satisfies(m -> {
+            assertThat(m.team()).isEqualTo("platform");
+            assertThat(m.admin()).isTrue();
+        });
+        store.saveRefreshToken("demo", "neha@x.com", "sealed-1", T0);
+        store.saveRefreshToken("demo", "neha@x.com", "sealed-2", T0);
+        assertThat(store.refreshToken("demo", "neha@x.com")).contains("sealed-2");
+        assertThat(store.accounts("demo")).containsExactly("neha@x.com");
     }
 }

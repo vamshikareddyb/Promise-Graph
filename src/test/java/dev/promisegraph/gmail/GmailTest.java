@@ -167,7 +167,7 @@ class GmailTest {
             gmail.messages.put("b", email("b", "x@y.com", "Big sale!", "CATEGORY_PROMOTIONS"));
             gmail.messages.put("c", email("c", "me@example.com", "Done: sent the deck.", "SENT"));
 
-            FetchResult r = new GmailActivitiesImpl(gmail).fetchNewEmails(new FetchRequest("demo", null, 2, 50));
+            FetchResult r = new GmailActivitiesImpl(gmail).fetchNewEmails(new FetchRequest("demo", null, 2, 50, null));
             assertThat(r.messages()).extracting(Message::id).containsExactly("gmail-a", "gmail-c");
             assertThat(r.skipped()).isEqualTo(1);
             assertThat(r.nextHistoryId()).isEqualTo("500");
@@ -184,12 +184,12 @@ class GmailTest {
             gmail.latestHistoryId = "505";
             var activities = new GmailActivitiesImpl(gmail);
 
-            FetchResult first = activities.fetchNewEmails(new FetchRequest("demo", "500", 2, 3));
+            FetchResult first = activities.fetchNewEmails(new FetchRequest("demo", "500", 2, 3, null));
             assertThat(first.messages()).extracting(Message::id).containsExactly("gmail-m1", "gmail-m2", "gmail-m3");
             assertThat(first.hasMore()).isTrue();
             assertThat(first.nextHistoryId()).isEqualTo("503");
 
-            FetchResult second = activities.fetchNewEmails(new FetchRequest("demo", first.nextHistoryId(), 2, 3));
+            FetchResult second = activities.fetchNewEmails(new FetchRequest("demo", first.nextHistoryId(), 2, 3, null));
             assertThat(second.messages()).extracting(Message::id).containsExactly("gmail-m4", "gmail-m5");
             assertThat(second.hasMore()).isFalse();
             assertThat(second.nextHistoryId()).isEqualTo("505");
@@ -200,7 +200,7 @@ class GmailTest {
             FakeGmail gmail = new FakeGmail();
             gmail.messages.put("a", email("a", "x@y.com", "I'll send it Monday.", "INBOX"));
             gmail.expired = true;
-            FetchResult r = new GmailActivitiesImpl(gmail).fetchNewEmails(new FetchRequest("demo", "1", 2, 50));
+            FetchResult r = new GmailActivitiesImpl(gmail).fetchNewEmails(new FetchRequest("demo", "1", 2, 50, null));
             assertThat(r.resynced()).isTrue();
             assertThat(r.messages()).hasSize(1);
             assertThat(r.nextHistoryId()).isEqualTo("500");

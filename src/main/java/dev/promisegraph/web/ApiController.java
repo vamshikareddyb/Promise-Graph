@@ -1,5 +1,6 @@
 package dev.promisegraph.web;
 
+import dev.promisegraph.config.AuthProperties;
 import dev.promisegraph.config.PromiseGraphProperties;
 import dev.promisegraph.domain.Person;
 import dev.promisegraph.domain.Promise;
@@ -64,8 +65,13 @@ public class ApiController {
 
     public record PersonView(String id, String name, String team, String role, boolean lead) {}
 
+    /**
+     * @param recipient who the promise was made to, if known
+     * @param handoff why the current owner has it, when it was handed over: "Covering for neha while
+     *     she's on leave (2026-11-16 to 2026-11-27)" or "Taken over from neha, who left on 2026-11-21"
+     */
     public record PromiseView(String id, String owner, String what, String due, String status, String createdAt,
-            String latestQuote, List<String> dependsOn, List<String> blocks) {}
+            String latestQuote, List<String> dependsOn, List<String> blocks, String recipient, String handoff) {}
 
     public record LinkView(String from, String to, String status, String reason, String fromWhat, String fromOwner,
             String toWhat, String toOwner, String decidedBy) {}
@@ -96,12 +102,14 @@ public class ApiController {
     private final Visibility visibility;
     private final AuditLog audit;
     private final ObjectProvider<MailboxOwner> mailbox;
+    private final AuthProperties auth;
 
     public ApiController(PromiseGraphProperties props, Repository repo, LinkStore links, InboxStore inbox, HandoffStore handoffs,
             Directory directory, InboxService inboxService, HandoffScheduler scheduler, Signals signals, NegotiationStore negotiations,
-            Visibility visibility, AuditLog audit, ObjectProvider<MailboxOwner> mailbox) {
+            Visibility visibility, AuditLog audit, ObjectProvider<MailboxOwner> mailbox, AuthProperties auth) {
         this.tenant = props.tenant();
         this.mailbox = mailbox;
+        this.auth = auth;
         this.repo = repo;
         this.links = links;
         this.inbox = inbox;
@@ -155,6 +163,10 @@ public class ApiController {
                             + "or sign in again with gradlew gmailAuth"));
             return List.of(new PersonView(email, email, "", "", true));
         }
+        if (auth.team()) {
+            // Team mode: the People page, and nobody else (no addresses found in other people's mail).
+            return directory.people().stream().map(p -> new PersonView(p.id(), p.name(), p.team(), p.role(), p.lead())).toList();
+        }
         Map<String, PersonView> out = new LinkedHashMap<>();
         for (Person p : directory.people()) {
             out.put(p.id(), new PersonView(p.id(), p.name(), p.team(), p.role(), p.lead()));
@@ -184,12 +196,32 @@ public class ApiController {
                 blocks.computeIfAbsent(l.from(), k -> new ArrayList<>()).add(l.to());
             }
         }
+        Map<String, String> handedOver = handoffNotes();
         return ps.stream()
                 .sorted(Comparator.comparing((Promise p) -> p.due() == null ? "9999" : p.due()).thenComparing(Promise::id))
                 .map(p -> new PromiseView(p.id(), p.owner(), p.what(), p.due(), p.status().dbValue(), p.createdAt(),
                         p.evidence().isEmpty() || !visibility.canSeeQuotes(viewer, p) ? null : p.evidence().get(p.evidence().size() - 1).quote(),
-                        dependsOn.getOrDefault(p.id(), List.of()), blocks.getOrDefault(p.id(), List.of())))
+                        dependsOn.getOrDefault(p.id(), List.of()), blocks.getOrDefault(p.id(), List.of()), p.recipient(),
+                        handedOver.get(p.id() + "\u001f" + p.owner())))
                 .toList();
+    }
+
+    /** promise ID + owner → why that owner has it, for promises moved by a handoff. */
+    private Map<String, String> handoffNotes() {
+        Map<String, String> out = new HashMap<>();
+        for (HandoffRecord h : handoffs.handoffs(tenant)) {
+            for (HandoffRecord.ItemState i : h.items()) {
+                if (!"transferred".equals(i.state()) || i.acceptedOwner() == null) {
+                    continue;
+                }
+                String note = h.endsOn() == null
+                        ? "Taken over from " + h.person() + ", who left on " + h.startsOn()
+                        : "Covering for " + h.person() + " while they're " + ("leave".equals(h.reason()) ? "on leave" : "away")
+                                + " (" + h.startsOn() + " to " + h.endsOn() + "); it goes back to them afterwards";
+                out.put(i.promiseId() + "\u001f" + i.acceptedOwner(), note);
+            }
+        }
+        return out;
     }
 
     @GetMapping("/links")
@@ -319,6 +351,16 @@ public class ApiController {
                 "web:" + req.promiseId() + ":" + req.owner().strip()));
         record(viewer, "handoff:assign", id + ":" + req.promiseId(), req.owner().strip());
         return Map.of("status", "asked " + req.owner().strip());
+    }
+
+    /** A departure's handover plan, approved by the leaving person's lead (the workflow checks it's them). */
+    @PostMapping("/handoffs/{id}/approve")
+    public Map<String, String> approveHandoff(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String id) {
+        String viewer = require(viewerHeader);
+        requirePersonOrLead(viewer, handoff(id).person());
+        signals.toHandoff(id, new HandoffResponse("approve plan", "plan", viewer, null, "web:approve"));
+        record(viewer, "handoff:approve", id, null);
+        return Map.of("status", "approved");
     }
 
     @PostMapping("/handoffs/{id}/cancel")
