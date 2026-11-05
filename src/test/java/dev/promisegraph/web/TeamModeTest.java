@@ -2,7 +2,12 @@ package dev.promisegraph.web;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.startsWith;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import dev.promisegraph.domain.Promise;
 import dev.promisegraph.domain.PromiseStatus;
+import dev.promisegraph.inbox.Signals;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.team.Member;
 import dev.promisegraph.team.TeamStore;
@@ -26,6 +32,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Team mode: everyone signs in, the server decides who is viewing, and each person sees only their own. */
@@ -50,6 +57,9 @@ class TeamModeTest {
     @Autowired
     TeamStore team;
 
+    @MockitoBean
+    Signals signals;
+
     @BeforeEach
     void seed() {
         team.addIfAbsent(new Member("demo", "boss@x.com", "Boss", "platform", "Lead", true, true, true, "2026-11-05T05:00:00Z"));
@@ -58,6 +68,25 @@ class TeamModeTest {
                 "2026-11-05T05:00:00Z", "2026-11-05T05:00:00Z", null, "2026-11-13", "email:neha@x.com:t1", List.of(), 1));
         repo.createPromise(new Promise("t-boss", "demo", "boss@x.com", "review the budget", PromiseStatus.ACTIVE, 0.9,
                 "2026-11-05T05:00:00Z", "2026-11-05T05:00:00Z", null, "2026-11-14", "email:boss@x.com:t2", List.of(), 1));
+        repo.createPromise(new Promise("t-neha-done", "demo", "neha@x.com", "write the runbook", PromiseStatus.KEPT, 0.9,
+                "2026-11-05T05:00:00Z", "2026-11-06T09:00:00Z", null, "2026-11-06", "email:neha@x.com:t3", List.of(), 2));
+    }
+
+    @Test
+    void theOwnerMarksAPromiseDoneAndItEndsAsKept() throws Exception {
+        mvc.perform(get("/api/promises").param("all", "true").sessionAttr(AuthController.USER, "neha@x.com"))
+                .andExpect(jsonPath("$[?(@.id == 't-neha')].canComplete").value(true))
+                .andExpect(jsonPath("$[?(@.id == 't-neha-done')].canComplete").value(false))
+                .andExpect(jsonPath("$[?(@.id == 't-neha-done')].updatedAt").value("2026-11-06T09:00:00Z"));
+        mvc.perform(post("/api/promises/t-neha/done").sessionAttr(AuthController.USER, "neha@x.com"))
+                .andExpect(status().isOk());
+        verify(signals).toPromise(eq("t-neha"), argThat(s -> s.kind().equals("kept") && s.actor().equals("neha@x.com")));
+
+        mvc.perform(post("/api/promises/t-neha-done/done").sessionAttr(AuthController.USER, "neha@x.com"))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/promises/t-boss/done").sessionAttr(AuthController.USER, "neha@x.com"))
+                .andExpect(status().isNotFound()); // someone else's promise isn't even visible
+        verify(signals, never()).toPromise(eq("t-boss"), argThat(s -> true));
     }
 
     @Test
