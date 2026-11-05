@@ -5,14 +5,15 @@ import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_MAIN;
 import dev.promisegraph.domain.Commitment;
 import dev.promisegraph.domain.CommitmentKind;
 import dev.promisegraph.domain.Ids;
-import dev.promisegraph.domain.Matching;
 import dev.promisegraph.domain.Matching.Resolution;
+import dev.promisegraph.domain.Matching;
 import dev.promisegraph.domain.Message;
 import dev.promisegraph.domain.Promise;
 import dev.promisegraph.domain.PromiseEvent;
 import dev.promisegraph.domain.PromiseStatus;
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Detect;
+import dev.promisegraph.extraction.Requests;
 import dev.promisegraph.handoff.Absence;
 import dev.promisegraph.handoff.AbsenceDetector;
 import dev.promisegraph.ingestion.ExtractionInput;
@@ -46,9 +47,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,9 +73,20 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
     private final TimingPolicy policy;
     private final double confidenceThreshold;
     private final WorkflowClient client;
+    private final Supplier<Optional<String>> mailboxOwner;
 
     public PromiseActivitiesImpl(Repository repo, LinkStore links, Notifier notifier, TimingPolicy policy,
             double confidenceThreshold, WorkflowClient client) {
+        this(repo, links, notifier, policy, confidenceThreshold, client, Optional::empty);
+    }
+
+    /**
+     * @param mailboxOwner the connected Gmail account, if any: requests emailed to it become its
+     *     promises. Without one, such requests are dropped, since nobody knows who "you" is.
+     */
+    public PromiseActivitiesImpl(Repository repo, LinkStore links, Notifier notifier, TimingPolicy policy,
+            double confidenceThreshold, WorkflowClient client, Supplier<Optional<String>> mailboxOwner) {
+        this.mailboxOwner = mailboxOwner;
         this.repo = repo;
         this.links = links;
         this.notifier = notifier;
@@ -90,7 +104,7 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
             if (!repo.claimMessage(input.tenant(), m.id(), claimant)) {
                 continue;
             }
-            if (Detect.looksLikeCommitment(m.text())) {
+            if (Detect.looksLikeCommitment(m.text()) || Requests.find(m).isPresent()) {
                 kept.add(m);
             }
             AbsenceDetector.detect(m).ifPresent(absences::add);
@@ -98,8 +112,28 @@ public final class PromiseActivitiesImpl implements PromiseActivities {
         return new ClaimResult(kept, absences);
     }
 
+    /** Gives requests ("you need to…") to the mailbox owner, or drops them if there isn't one or they wrote it. */
+    List<Commitment> assignRequests(List<Commitment> commitments) {
+        List<Commitment> out = new ArrayList<>();
+        for (Commitment c : commitments) {
+            if (!Requests.ADDRESSEE.equals(c.owner())) {
+                out.add(c);
+                continue;
+            }
+            Optional<String> me = mailboxOwner.get();
+            if (me.isEmpty() || me.get().equalsIgnoreCase(c.recipient())) {
+                log.info("dropped request in {}: no mailbox owner, or one they sent themselves", c.messageId());
+                continue;
+            }
+            out.add(new Commitment(c.kind(), c.messageId(), me.get(), c.what(), c.quote(), c.confidence(), c.channel(),
+                    c.recipient(), c.due(), c.shiftDays()));
+        }
+        return out;
+    }
+
     @Override
-    public List<Action> resolveCommitments(ResolveRequest req) {
+    public List<Action> resolveCommitments(ResolveRequest original) {
+        ResolveRequest req = new ResolveRequest(original.tenant(), assignRequests(original.commitments()), original.now());
         Set<String> owners = new TreeSet<>();
         req.commitments().forEach(c -> owners.add(c.owner()));
         List<Promise> open = new ArrayList<>(owners.isEmpty() ? List.of() : repo.openPromises(req.tenant(), owners));
