@@ -37,13 +37,14 @@
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
-  .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied, .s-auto_fixed, .s-retried { color: var(--good); }
+  .s-completed, .s-active, .s-confirmed, .s-accepted, .s-transferred, .s-covered, .s-returned, .s-applied, .s-auto_fixed, .s-retried { color: var(--good); }
   .s-at_risk, .s-suggested, .s-proposed, .s-awaiting_cover, .s-needs_owner, .s-planning, .s-scheduled, .s-awaiting_approval, .s-applying { color: var(--warn); }
   .s-broken, .s-rejected, .s-uncovered, .s-cancelled, .s-failed, .s-unresolved { color: var(--bad); }
   .s-detected, .s-kept, .s-dismissed, .s-closed, .s-active-handoff, .s-nothing_to_hand_over, .s-expired, .s-superseded, .s-dismissed { color: var(--muted); }
   .banner { box-sizing: border-box; width: calc(100% - 32px); max-width: 968px; margin: 16px auto 0; padding: 10px 14px; border: 1px solid var(--warn); border-radius: 8px; color: var(--warn); }
   .banner a { color: inherit; font-weight: 600; }
   .note { margin-top: 4px; font-size: 13px; color: var(--warn); }
+  h2.section { margin-top: 36px; }
   .signin { max-width: 440px; margin: 60px auto; text-align: center; }
   .signin a.act { display: inline-block; text-decoration: none; margin-top: 12px; }
   .s-awaiting_approval { color: var(--warn); }
@@ -150,19 +151,42 @@ async function act(button) {
 }
 
 // ------------------------------------------------------------ promises
+const OPEN_PROMISE = new Set(['detected', 'active', 'at_risk']);
+// How a promise's status reads on the Promises page: "kept" is what the owner calls done.
+const PROMISE_LABEL = { kept: 'completed', broken: 'missed', at_risk: 'at risk' };
+const promisePill = s => `<span class="pill s-${s === 'kept' ? 'completed' : esc(s)}">${esc(PROMISE_LABEL[s] || s)}</span>`;
+const linksNote = p => [p.dependsOn.length ? 'waits on ' + p.dependsOn.length : '', p.blocks.length ? p.blocks.length + ' wait on it' : '']
+  .filter(Boolean).join(', ');
+
 async function renderPromises() {
-  const ps = await api(`/promises?all=${state.allPromises}`);
+  const ps = await api('/promises?all=true');
+  const open = ps.filter(p => OPEN_PROMISE.has(p.status));
+  const closed = ps.filter(p => !OPEN_PROMISE.has(p.status) && (p.status === 'kept' || state.allPromises))
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  const about = p => `${esc(p.what)}${p.latestQuote ? `<div class="meta">“${esc(p.latestQuote)}”</div>` : ''}
+    ${p.handoff ? `<div class="note">${esc(p.handoff)}</div>` : ''}${p.recipient && p.recipient !== p.owner ? `<div class="meta">for ${esc(name(p.recipient))}</div>` : ''}
+    ${linksNote(p) ? `<div class="meta">${esc(linksNote(p))}</div>` : ''}`;
   $view.innerHTML = `
     <h2>Promises</h2>
-    <p class="lead">${ps.length} ${state.allPromises ? 'in total' : 'open'}, soonest due first.</p>
-    <div class="toolbar"><label><input type="checkbox" id="allP" ${state.allPromises ? 'checked' : ''}> Include closed</label></div>
-    ${ps.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Links</th></tr></thead><tbody>
-      ${ps.map(p => `<tr><td>${esc(p.what)}${p.latestQuote ? `<div class="meta">“${esc(p.latestQuote)}”</div>` : ''}
-        ${p.handoff ? `<div class="note">${esc(p.handoff)}</div>` : ''}${p.recipient && p.recipient !== p.owner ? `<div class="meta">for ${esc(name(p.recipient))}</div>` : ''}</td>
-        <td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${pill(p.status)}</td>
-        <td class="meta">${p.dependsOn.length ? 'waits on ' + p.dependsOn.length : ''}${p.dependsOn.length && p.blocks.length ? ', ' : ''}${p.blocks.length ? p.blocks.length + ' wait on it' : ''}</td></tr>`).join('')}
-      </tbody></table>` : '<div class="empty">No promises yet. Send a message or connect Gmail.</div>'}`;
+    <p class="lead">${open.length} open, soonest due first. Mark one done when it's finished; it moves to the history below.</p>
+    ${open.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Done?</th></tr></thead><tbody>
+      ${open.map(p => `<tr><td>${about(p)}</td><td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${promisePill(p.status)}</td>
+        <td>${p.canComplete ? `<button class="act" data-done="${esc(p.id)}">Mark done</button><div class="err"></div>` : ''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">No open promises. Send a message or connect Gmail.</div>'}
+    <h2 class="section">Completed promises</h2>
+    <div class="toolbar"><label><input type="checkbox" id="allP" ${state.allPromises ? 'checked' : ''}> Also show missed and cancelled</label></div>
+    ${closed.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Closed on</th></tr></thead><tbody>
+      ${closed.map(p => `<tr><td>${about(p)}</td><td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${promisePill(p.status)}</td>
+        <td class="meta">${esc(String(p.updatedAt || '').slice(0, 10) || '—')}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">Nothing completed yet.</div>'}`;
   document.getElementById('allP').onchange = e => { state.allPromises = e.target.checked; render(); };
+  $view.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => {
+    b.disabled = true; b.textContent = 'Marking…';
+    try {
+      await post(`/promises/${encodeURIComponent(b.dataset.done)}/done`, {});
+      setTimeout(render, 1200); // the promise's workflow records it, then it moves to the history
+    } catch (e) { b.disabled = false; b.textContent = 'Mark done'; b.nextElementSibling.textContent = e.message; }
+  });
 }
 
 // ------------------------------------------------------------ links
@@ -238,6 +262,14 @@ async function renderGraph() {
 }
 
 // ------------------------------------------------------------ handoffs
+/** The day cover is planned: a few days before the absence starts (never before today). */
+function planDay(startsOn) {
+  const d = new Date(startsOn + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - (state.me.handoffPrepDays ?? 3));
+  const today = new Date().toISOString().slice(0, 10);
+  const day = d.toISOString().slice(0, 10);
+  return day < today ? today : day;
+}
 async function renderHandoffs() {
   const hs = await api('/handoffs');
   const peopleOpt = state.people.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
@@ -253,15 +285,21 @@ async function renderHandoffs() {
       <select id="ap">${peopleOpt}</select> from <input type="date" id="as"> to <input type="date" id="ae">
       <label><input type="checkbox" id="aleave"> leaving the company (no end date)</label>
       <button class="act primary" id="addAbs">Plan cover</button><span class="err" id="absErr"></span></div></div>
-    ${hs.length ? hs.map(h => `<div class="card">
-      <div><b>${esc(name(h.person))}</b> ${h.endsOn ? 'away ' + esc(h.startsOn) + ' to ' + esc(h.endsOn) : 'leaving the company (from ' + esc(h.startsOn) + ', for good)'} ${pill(h.status)}
+    ${hs.length ? hs.map(h => { const mine = h.person === state.person; return `<div class="card">
+      <div><b>${mine ? (h.endsOn ? 'Your leave' : 'You are leaving') : esc(name(h.person))}</b>
+        ${h.endsOn ? (mine ? '' : 'away ') + esc(h.startsOn) + ' to ' + esc(h.endsOn) : (mine ? 'from ' : 'leaving the company (from ') + esc(h.startsOn) + (mine ? ', for good' : ', for good)')} ${pill(h.status)}
         ${h.planner ? `<span class="meta"> · planned by ${esc(h.planner)}</span>` : ''}</div>
       ${h.items.length ? `<table style="margin-top:10px"><thead><tr><th>Promise</th><th>Cover</th><th>State</th><th></th></tr></thead>
-        <tbody>${h.items.map(i => item(h, i)).join('')}</tbody></table>` : '<div class="meta">Nothing planned yet.</div>'}
-      ${h.status === 'awaiting_approval' && h.person !== state.person ? `<div class="row"><button class="act primary" data-approve="${esc(h.id)}">Approve handover plan</button>
+        <tbody>${h.items.map(i => item(h, i)).join('')}</tbody></table>`
+        : `<div class="meta">${mine && h.status === 'scheduled'
+          ? `Nothing to do for now. On ${esc(planDay(h.startsOn))}, cover for your open promises is picked from your team and they're asked to take them over${h.endsOn ? '; everything comes back to you the day after you return' : ''}.`
+          : 'Nothing planned yet.'}</div>`}
+      ${h.status === 'awaiting_approval' && !mine ? `<div class="row"><button class="act primary" data-approve="${esc(h.id)}">Approve handover plan</button>
         <span class="meta">As their lead: check who takes what above, then approve. Nothing moves before that.</span></div>` : ''}
-      ${['scheduled', 'planning', 'awaiting_approval', 'awaiting_cover', 'covered', 'active'].includes(h.status) ? `<div class="row"><button class="act" data-cancel="${esc(h.id)}">${h.status === 'active' ? 'They are back early' : h.endsOn ? 'Cancel absence' : 'They are not leaving'}</button></div>` : ''}
-    </div>`).join('') : '<div class="empty">No absences yet. They are detected from messages like “I’m on leave from 16 Nov to 27 Nov”, or plan one above.</div>'}`;
+      ${['scheduled', 'planning', 'awaiting_approval', 'awaiting_cover', 'covered', 'active'].includes(h.status) ? `<div class="row"><button class="act" data-cancel="${esc(h.id)}">${
+        mine ? (h.status === 'active' ? "I'm back early" : h.endsOn ? 'Cancel my leave' : "I'm not leaving")
+             : (h.status === 'active' ? 'They are back early' : h.endsOn ? 'Cancel absence' : 'They are not leaving')}</button></div>` : ''}
+    </div>`; }).join('') : '<div class="empty">No absences yet. They are detected from messages like “I’m on leave from 16 Nov to 27 Nov”, or plan one above.</div>'}`;
   if (state.person) document.getElementById('ap').value = state.person;
   document.getElementById('addAbs').onclick = async () => {
     const leaving = document.getElementById('aleave').checked;

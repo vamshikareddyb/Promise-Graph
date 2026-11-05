@@ -24,6 +24,7 @@ import dev.promisegraph.store.LinkStore;
 import dev.promisegraph.store.NegotiationStore;
 import dev.promisegraph.store.Repository;
 import dev.promisegraph.temporal.Contracts.HandoffResponse;
+import dev.promisegraph.temporal.Contracts.PromiseSignal;
 import dev.promisegraph.temporal.NegotiationContracts.Vote;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -71,7 +72,8 @@ public class ApiController {
      *     she's on leave (2026-11-16 to 2026-11-27)" or "Taken over from neha, who left on 2026-11-21"
      */
     public record PromiseView(String id, String owner, String what, String due, String status, String createdAt,
-            String latestQuote, List<String> dependsOn, List<String> blocks, String recipient, String handoff) {}
+            String latestQuote, List<String> dependsOn, List<String> blocks, String recipient, String handoff, String updatedAt,
+            boolean canComplete) {}
 
     public record LinkView(String from, String to, String status, String reason, String fromWhat, String fromOwner,
             String toWhat, String toOwner, String decidedBy) {}
@@ -202,8 +204,29 @@ public class ApiController {
                 .map(p -> new PromiseView(p.id(), p.owner(), p.what(), p.due(), p.status().dbValue(), p.createdAt(),
                         p.evidence().isEmpty() || !visibility.canSeeQuotes(viewer, p) ? null : p.evidence().get(p.evidence().size() - 1).quote(),
                         dependsOn.getOrDefault(p.id(), List.of()), blocks.getOrDefault(p.id(), List.of()), p.recipient(),
-                        handedOver.get(p.id() + "\u001f" + p.owner())))
+                        handedOver.get(p.id() + "\u001f" + p.owner()), p.updatedAt(),
+                        p.status().isOpen() && (p.owner().equals(viewer) || visibility.canOperate(viewer))))
                 .toList();
+    }
+
+    /**
+     * The owner says a promise is done. The promise workflow records it as kept (shown as
+     * "completed") and finishes, so no more reminders are sent for it.
+     */
+    @PostMapping("/promises/{id}/done")
+    public Map<String, String> done(@RequestHeader(name = VIEWER, required = false) String viewerHeader, @PathVariable String id) {
+        String viewer = require(viewerHeader);
+        Promise p = repo.getPromise(tenant, id).filter(x -> visibleIds(viewer).contains(x.id()))
+                .orElseThrow(() -> new InboxService.ActionException(404, "no such promise"));
+        if (!p.owner().equals(viewer) && !visibility.canOperate(viewer)) {
+            throw new InboxService.ActionException(403, "only " + p.owner() + " can mark this promise done");
+        }
+        if (!p.status().isOpen()) {
+            throw new InboxService.ActionException(409, "this promise is already closed (" + p.status().dbValue() + ")");
+        }
+        signals.toPromise(id, PromiseSignal.of("kept", "web:done:" + id, viewer));
+        record(viewer, "promise:done", id, null);
+        return Map.of("status", "completing");
     }
 
     /** promise ID + owner → why that owner has it, for promises moved by a handoff. */

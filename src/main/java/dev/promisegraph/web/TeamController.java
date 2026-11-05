@@ -1,6 +1,7 @@
 package dev.promisegraph.web;
 
 import dev.promisegraph.config.AuthProperties;
+import dev.promisegraph.config.HandoffProperties;
 import dev.promisegraph.config.PromiseGraphProperties;
 import dev.promisegraph.gmail.GmailSyncContracts;
 import dev.promisegraph.gmail.GmailSyncWorkflow;
@@ -41,9 +42,11 @@ public class TeamController {
     private final String tenant;
     private final ObjectProvider<WorkflowClient> client;
     private final boolean workerEnabled;
+    private final int handoffPrepDays;
 
     public TeamController(AuthProperties auth, ObjectProvider<TeamStore> team, Visibility visibility, AuditLog audit,
-            PromiseGraphProperties props, ObjectProvider<WorkflowClient> client) {
+            PromiseGraphProperties props, ObjectProvider<WorkflowClient> client, HandoffProperties handoff) {
+        this.handoffPrepDays = handoff.prepDays();
         this.client = client;
         this.workerEnabled = props.temporal().workerEnabled();
         this.auth = auth;
@@ -58,6 +61,7 @@ public class TeamController {
     public ResponseEntity<Map<String, Object>> me(@RequestHeader(name = ApiController.VIEWER, required = false) String viewer) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("mode", auth.mode());
+        out.put("handoffPrepDays", handoffPrepDays); // cover is planned this many days before an absence
         if (!auth.team()) {
             return ResponseEntity.ok(out);
         }
