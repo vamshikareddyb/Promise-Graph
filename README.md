@@ -91,7 +91,9 @@ Open **http://localhost:8787** for the web app. Pick who you are at the top righ
 that person's reminders and questions with buttons to answer them. The other tabs show promises,
 links, a dependency graph, handoffs and recovery plans. The Temporal UI shows every workflow and its history.
 
-To read your own Gmail, follow [docs/gmail-setup.md](docs/gmail-setup.md).
+To read your own Gmail, follow [docs/gmail-setup.md](docs/gmail-setup.md). For a team, where everyone
+signs in with Google, sees only their own promises and hands work over when on leave or leaving,
+follow [docs/team-setup.md](docs/team-setup.md).
 
 On Windows, use `.\gradlew.bat` instead of `./gradlew`. If Java 25 is your default, point Gradle at
 Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
@@ -113,6 +115,7 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 | `PG_ADMINS` | empty | People allowed on the Ops page besides team leads (e.g. yourself with personal Gmail) |
 | `PG_MANAGEMENT_PORT` / `PG_MANAGEMENT_ADDRESS` | `8788` / `127.0.0.1` | Health and Prometheus metrics; use `0.0.0.0` on Linux for the Prometheus container |
 | `PG_GMAIL_ENABLED` | `false` | Read a Gmail account (see the Gmail guide) |
+| `PG_AUTH` | `none` | `google`: team mode, where everyone signs in and sees only their own promises (see the team guide) |
 | `PG_WEBHOOK_TOKEN` | empty | Required to accept `POST /messages` |
 | `PG_CONFIDENCE_THRESHOLD` | `0.8` | Promises at or above this activate without confirmation |
 | `SERVER_ADDRESS` | `127.0.0.1` | The web app has no login yet, so it only listens on this computer |
