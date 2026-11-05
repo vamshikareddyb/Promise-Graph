@@ -15,7 +15,7 @@ spring:
 promisegraph:
   tenant: ${PG_TENANT:demo}
   store: ${PG_STORE:memory}            # memory | jdbc
-  extractor: ${PG_EXTRACTOR:rules}     # rules | llm
+  extractor: ${PG_EXTRACTOR:llm}       # llm (Claude, needs ANTHROPIC_API_KEY) | rules
   model: ${PG_MODEL:claude-sonnet-5-5}
   confidence-threshold: ${PG_CONFIDENCE_THRESHOLD:0.8}
   llm-max-concurrency: ${PG_LLM_MAX_CONCURRENCY:4}
@@ -28,12 +28,12 @@ promisegraph:
     max-batch: 20
     max-wait: 30s
   handoff:
-    planner: ${PG_HANDOFF_PLANNER:rules}   # rules | agent
+    planner: ${PG_HANDOFF_PLANNER:agent}   # agent (Claude) | rules
     prep-days: ${PG_HANDOFF_PREP_DAYS:3}
     agent-max-steps: ${PG_HANDOFF_AGENT_MAX_STEPS:12}
   negotiation:
     enabled: ${PG_NEGOTIATION_ENABLED:true}
-    planner: ${PG_NEGOTIATION_PLANNER:rules}   # rules | agent
+    planner: ${PG_NEGOTIATION_PLANNER:agent}   # agent (Claude) | rules
     min-teams: ${PG_NEGOTIATION_MIN_TEAMS:2}
     capacity: ${PG_NEGOTIATION_CAPACITY:8}
     approval-hours: ${PG_NEGOTIATION_APPROVAL_HOURS:72}
@@ -42,6 +42,12 @@ promisegraph:
     agent-max-steps: ${PG_NEGOTIATION_AGENT_MAX_STEPS:12}
     customers: ${PG_CUSTOMERS:Acme,Globex,Initech}
     team-checks: ${PG_NEGOTIATION_TEAM_CHECKS:true}
+  # Claude is the model for every agent. Without ANTHROPIC_API_KEY each one falls back to its rules.
+  drafts:
+    enabled: ${PG_DRAFTS_ENABLED:true}       # draft a reply to each email that produced a promise
+    writer: ${PG_DRAFTS_WRITER:claude}       # claude | template
+    model: ${PG_DRAFTS_MODEL:}               # empty: same model as extraction
+    max-tokens: ${PG_DRAFTS_MAX_TOKENS:1200}
   privacy:
     admins: ${PG_ADMINS:}   # comma-separated ids allowed on the operations page besides team leads
   auth:

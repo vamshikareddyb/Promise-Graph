@@ -119,6 +119,15 @@ public final class GmailRestApi implements GmailApi {
         return parseMessage(get("/messages/" + q(id) + "?format=full", false));
     }
 
+    @Override
+    public List<GmailMessage> thread(String threadId) {
+        JsonNode n = get("/threads/" + q(threadId) + "?format=full", false);
+        List<GmailMessage> out = new ArrayList<>();
+        n.path("messages").forEach(m -> out.add(parseMessage(m)));
+        out.sort(java.util.Comparator.comparingLong(GmailMessage::internalDate));
+        return out;
+    }
+
     /** Pulls headers and the first text/plain and text/html bodies out of Gmail's MIME tree. */
     static GmailMessage parseMessage(JsonNode n) {
         JsonNode payload = n.path("payload");

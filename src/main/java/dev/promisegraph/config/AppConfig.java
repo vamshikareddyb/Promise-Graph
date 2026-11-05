@@ -2,6 +2,12 @@ package dev.promisegraph.config;
 
 import com.zaxxer.hikari.HikariDataSource;
 import dev.promisegraph.domain.TimingPolicy;
+import dev.promisegraph.drafts.ClaudeReplyDrafter;
+import dev.promisegraph.drafts.DraftStore;
+import dev.promisegraph.drafts.InMemoryDraftStore;
+import dev.promisegraph.drafts.JdbcDraftStore;
+import dev.promisegraph.drafts.ReplyDrafter;
+import dev.promisegraph.drafts.TemplateReplyDrafter;
 import dev.promisegraph.extraction.Extractor;
 import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.extraction.model.AnthropicExtractor;
@@ -43,6 +49,8 @@ import io.temporal.client.WorkflowExecutionAlreadyStarted;
 import io.temporal.client.WorkflowOptions;
 import java.time.Clock;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -57,6 +65,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** Application wiring: storage, extraction, notifications, handoffs and the ingestion gateway. */
 @Configuration
 public class AppConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AppConfig.class);
 
     // ------------------------------------------------------------ storage: memory (default) or Postgres
 
@@ -116,12 +126,50 @@ public class AppConfig {
 
     // ------------------------------------------------------------ extraction, notifications, people
 
+    /**
+     * Claude is the model behind every agent. Without ANTHROPIC_API_KEY the app still starts: each
+     * agent falls back to its rule-based version and says so in the log.
+     */
+    static Optional<String> claudeKey(Environment env) {
+        return Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(String::strip).filter(k -> !k.isEmpty());
+    }
+
+    private static void noKey(String what) {
+        log.warn("ANTHROPIC_API_KEY is not set: {} uses the built-in rules instead of Claude", what);
+    }
+
     @Bean
     Extractor extractor(PromiseGraphProperties props, Environment env) {
         if ("llm".equals(props.extractor())) {
-            return new AnthropicExtractor(env.getProperty("ANTHROPIC_API_KEY"), props.model(), 2000);
+            Optional<String> key = claudeKey(env);
+            if (key.isPresent()) {
+                log.info("promise extraction: Claude ({})", props.model());
+                return new AnthropicExtractor(key.get(), props.model(), 2000);
+            }
+            noKey("promise extraction");
         }
         return new RuleBasedExtractor();
+    }
+
+    /** The reply-draft agent: Claude writes the reply; without a key, a plain acknowledgement is drafted. */
+    @Bean
+    ReplyDrafter replyDrafter(DraftProperties drafts, PromiseGraphProperties props, Environment env) {
+        Optional<String> key = claudeKey(env);
+        if ("claude".equals(drafts.writer()) && key.isPresent()) {
+            String model = drafts.model() == null || drafts.model().isBlank() ? props.model() : drafts.model();
+            log.info("reply drafts: Claude ({})", model);
+            return new ClaudeReplyDrafter(new AnthropicModelClient(key.get()), model, drafts.maxTokens());
+        }
+        if ("claude".equals(drafts.writer())) {
+            noKey("reply drafting");
+        }
+        return new TemplateReplyDrafter();
+    }
+
+    @Bean
+    DraftStore draftStore(ObjectProvider<HikariDataSource> ds) {
+        HikariDataSource d = ds.getIfAvailable();
+        return d == null ? new InMemoryDraftStore() : new JdbcDraftStore(new NamedParameterJdbcTemplate(d));
     }
 
     @Bean
@@ -151,8 +199,11 @@ public class AppConfig {
     HandoffPlanning.Planner handoffPlanner(HandoffProperties handoff, PromiseGraphProperties props, Environment env) {
         HandoffPlanning.Planner rules = new HandoffPlanning.RulePlanner();
         if ("agent".equals(handoff.planner())) {
-            return new HandoffAgent(new AnthropicModelClient(env.getProperty("ANTHROPIC_API_KEY")), props.model(),
-                    handoff.agentMaxSteps(), rules);
+            Optional<String> key = claudeKey(env);
+            if (key.isPresent()) {
+                return new HandoffAgent(new AnthropicModelClient(key.get()), props.model(), handoff.agentMaxSteps(), rules);
+            }
+            noKey("handoff planning");
         }
         return rules;
     }
@@ -181,8 +232,11 @@ public class AppConfig {
     RecoveryPlanning.Planner recoveryPlanner(NegotiationProperties negotiation, PromiseGraphProperties props, Environment env) {
         RecoveryPlanning.Planner rules = new RulePlanner();
         if ("agent".equals(negotiation.planner())) {
-            return new OptionAgent(new AnthropicModelClient(env.getProperty("ANTHROPIC_API_KEY")), props.model(),
-                    negotiation.agentMaxSteps(), rules);
+            Optional<String> key = claudeKey(env);
+            if (key.isPresent()) {
+                return new OptionAgent(new AnthropicModelClient(key.get()), props.model(), negotiation.agentMaxSteps(), rules);
+            }
+            noKey("recovery planning");
         }
         return rules;
     }

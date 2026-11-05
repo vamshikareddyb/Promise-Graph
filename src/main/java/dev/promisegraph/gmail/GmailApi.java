@@ -27,6 +27,14 @@ public interface GmailApi {
 
     GmailMessage getMessage(String id);
 
+    /**
+     * Every message in a thread, oldest first; the reply-draft agent reads it for context.
+     * Implementations without thread access return an empty list and drafts use the one email.
+     */
+    default List<GmailMessage> thread(String threadId) {
+        return List.of();
+    }
+
     /** Gmail keeps about a week of history; an older cursor must be replaced by a fresh sync. */
     final class HistoryExpiredException extends RuntimeException {
         private static final long serialVersionUID = 1L;
