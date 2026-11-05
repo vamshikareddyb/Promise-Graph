@@ -106,6 +106,21 @@ follow [docs/team-setup.md](docs/team-setup.md).
 On Windows, use `.\gradlew.bat` instead of `./gradlew`. If Java 25 is your default, point Gradle at
 Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 
+### Free drafts with a local model (Ollama)
+
+Follow-up drafts can come from a free model running on your own computer instead of Claude: no API
+key, no cost, and email never leaves the machine. Install Ollama from https://ollama.com, then:
+
+```powershell
+ollama pull llama3.2              # one-time download, about 2 GB
+$env:PG_DRAFTS_WRITER = "ollama"
+.\gradlew.bat bootRun
+```
+
+The log says `reply drafts: local model llama3.2 through Ollama`. A local model is slower than
+Claude (often 10-60 seconds per draft on a laptop) and writes plainer emails; promise extraction
+keeps using Claude if a key is set, otherwise the built-in rules.
+
 ### Settings
 
 | Variable | Default | Meaning |
@@ -115,7 +130,9 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 | `PG_MODEL` | `claude-sonnet-5-5` | The Claude model the agents use |
 | `PG_EXTRACTOR` | `llm` | Claude finds promises; `rules` uses the built-in patterns |
 | `PG_DRAFTS_AUTO` | `false` | `true`: also draft a reply to every email that brings a promise, without being asked |
-| `PG_DRAFTS_WRITER` | `claude` | `template`: a plain acknowledgement, no model |
+| `PG_DRAFTS_WRITER` | `claude` | `ollama`: a free model on this computer (see below); `template`: plain text, no model |
+| `PG_OLLAMA_MODEL` | `llama3.2` | The local model for `ollama` (e.g. `qwen2.5:7b` for better drafts on a stronger PC) |
+| `PG_OLLAMA_URL` | `http://localhost:11434` | Where Ollama listens |
 | `PG_DRAFTS_MODEL` | empty | A different Claude model for drafts (empty: `PG_MODEL`) |
 | `PG_HANDOFF_PLANNER` | `agent` | Claude plans handoff cover; `rules` uses the built-in rules |
 | `PG_HANDOFF_PREP_DAYS` | `3` | How many days before an absence to plan cover |

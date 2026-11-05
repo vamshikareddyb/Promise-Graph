@@ -9,6 +9,7 @@ import dev.promisegraph.drafts.DraftContracts;
 import dev.promisegraph.drafts.DraftContracts.DraftRequest;
 import dev.promisegraph.drafts.DraftStore;
 import dev.promisegraph.drafts.EmailRef;
+import dev.promisegraph.drafts.OllamaReplyDrafter;
 import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.drafts.ReplyDraft;
 import dev.promisegraph.drafts.ReplyDrafter;
@@ -146,9 +147,12 @@ public class DraftsController {
 
     // ------------------------------------------------------------ follow-ups on a promise
 
-    /** "claude", or "template: why Claude isn't writing", for the page to explain a plain draft. */
+    /** "claude", "ollama:<model>", or "template: why no model is writing", for the page to explain a plain draft. */
     private String writer() {
-        return drafter instanceof TemplateReplyDrafter t ? TemplateReplyDrafter.by(t.reason()) : "claude";
+        if (drafter instanceof TemplateReplyDrafter t) {
+            return TemplateReplyDrafter.by(t.reason());
+        }
+        return drafter instanceof OllamaReplyDrafter o ? o.by() : "claude";
     }
 
     /** The latest email a promise was made or changed in, if it came from Gmail. */

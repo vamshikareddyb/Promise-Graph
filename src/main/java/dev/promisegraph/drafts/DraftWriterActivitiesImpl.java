@@ -18,7 +18,7 @@ public final class DraftWriterActivitiesImpl implements DraftWriterActivities {
             return drafter.write(context);
         } catch (RuntimeException e) {
             String why = String.valueOf(e.getMessage());
-            // A bad key or model name won't fix itself: give up at once rather than after every retry.
+            // A bad key, or a model that isn't there, won't fix itself: give up at once rather than after every retry.
             if (why.matches(".*returned 4(0[0-4]|1\\d|2[0-8]|[3-9]\\d).*")) {
                 throw ApplicationFailure.newNonRetryableFailureWithCause(why, "DraftModelRejected", e);
             }

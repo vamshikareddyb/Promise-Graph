@@ -273,3 +273,12 @@ changes with who owes it: an update when it's yours, a check-in when it's theirs
 start from the person's own email, so the "you wrote this" and "already answered" skips only apply
 to automatic replies, which are now off unless `PG_DRAFTS_AUTO=true`. The Drafts and Plans tabs
 are gone; recovery plans are still chosen from the Inbox.
+
+## 37. A free local writer for drafts
+
+The Claude API needs prepaid credit, and chat subscriptions (Claude.ai, ChatGPT) can't be used by
+other apps. So drafts can also come from a model on the person's own computer through Ollama
+(`PG_DRAFTS_WRITER=ollama`, default model `llama3.2`), with the same prompt and context as Claude.
+A missing Ollama or model fails at once with the fix in the message (`ollama serve`,
+`ollama pull <model>`), and the draft falls back to the template with that reason shown. The
+model activity's timeout is now 3 minutes and the page waits up to 4, since local models are slow.

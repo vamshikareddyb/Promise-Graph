@@ -6,6 +6,7 @@ import dev.promisegraph.drafts.ClaudeReplyDrafter;
 import dev.promisegraph.drafts.DraftStore;
 import dev.promisegraph.drafts.InMemoryDraftStore;
 import dev.promisegraph.drafts.JdbcDraftStore;
+import dev.promisegraph.drafts.OllamaReplyDrafter;
 import dev.promisegraph.drafts.ReplyDrafter;
 import dev.promisegraph.drafts.TemplateReplyDrafter;
 import dev.promisegraph.extraction.Extractor;
@@ -192,6 +193,10 @@ public class AppConfig {
     /** The reply-draft agent: Claude writes the reply; without a key, a plain acknowledgement is drafted. */
     @Bean
     ReplyDrafter replyDrafter(DraftProperties drafts, PromiseGraphProperties props, Environment env) {
+        if ("ollama".equals(drafts.writer())) {
+            log.info("reply drafts: local model {} through Ollama at {}", drafts.ollamaModel(), drafts.ollamaUrl());
+            return new OllamaReplyDrafter(drafts.ollamaUrl(), drafts.ollamaModel(), drafts.maxTokens());
+        }
         Optional<String> key = claudeKey(env);
         if ("claude".equals(drafts.writer()) && key.isPresent()) {
             String model = drafts.model() == null || drafts.model().isBlank() ? props.model() : drafts.model();
