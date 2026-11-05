@@ -43,6 +43,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/drafts")
 public class DraftsController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DraftsController.class);
+
     public record PromiseRef(String id, String what, String owner, String due, String status) {}
 
     public record DraftView(String id, String to, String subject, String body, String status, String writtenBy, String createdAt,
@@ -211,6 +213,18 @@ public class DraftsController {
         out.put("status", "writing");
         out.put("previous", existing.map(ReplyDraft::updatedAt).orElse(null));
         return out;
+    }
+
+    /** Anything unexpected: say what went wrong on the page instead of a bare "Internal Server Error". */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> unexpected(RuntimeException e) {
+        log.error("drafts request failed", e);
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String detail = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+        return ResponseEntity.status(500).body(Map.of("error", "Couldn't draft: " + detail.lines().findFirst().orElse(detail)));
     }
 
     @ExceptionHandler(InboxService.ActionException.class)

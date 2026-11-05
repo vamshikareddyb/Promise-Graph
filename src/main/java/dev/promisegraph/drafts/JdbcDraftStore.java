@@ -12,7 +12,10 @@ import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-/** Postgres drafts. Schema: migrations/006_drafts.sql. */
+/**
+ * Postgres drafts. Schema: migrations/006_drafts.sql. The table is also created on startup if it
+ * is missing, since Postgres only runs the migrations folder when the database is first created.
+ */
 public final class JdbcDraftStore implements DraftStore {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -21,8 +24,19 @@ public final class JdbcDraftStore implements DraftStore {
 
     private final NamedParameterJdbcTemplate jdbc;
 
+    static final String SCHEMA = """
+            CREATE TABLE IF NOT EXISTS reply_drafts (
+                tenant TEXT NOT NULL, id TEXT NOT NULL, owner TEXT NOT NULL, mailbox TEXT, thread_id TEXT NOT NULL,
+                channel TEXT NOT NULL, source_message_id TEXT NOT NULL, to_address TEXT, subject TEXT NOT NULL,
+                body TEXT NOT NULL, status TEXT NOT NULL, promise_ids JSONB NOT NULL DEFAULT '[]', written_by TEXT,
+                created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (tenant, id));
+            CREATE INDEX IF NOT EXISTS reply_drafts_owner ON reply_drafts (tenant, lower(owner), created_at DESC)""";
+
     public JdbcDraftStore(NamedParameterJdbcTemplate jdbc) {
         this.jdbc = jdbc;
+        for (String statement : SCHEMA.split(";")) {
+            jdbc.getJdbcOperations().execute(statement.strip());
+        }
     }
 
     private static String iso(OffsetDateTime t) {
