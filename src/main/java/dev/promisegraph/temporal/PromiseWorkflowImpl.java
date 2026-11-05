@@ -415,6 +415,10 @@ public class PromiseWorkflowImpl implements PromiseWorkflow {
         if (promise.confidence() >= threshold) {
             notify(promise.owner(), "Tracking your promise: " + promise.what() + due + ". Not a promise? Dismiss it.",
                     List.of("dismiss", "edit"), "announce");
+        } else if (promise.recipient() != null && !promise.recipient().equals(promise.owner())) {
+            // A request emailed to the owner: someone else asked, so the owner decides whether to take it on.
+            notify(promise.owner(), promise.recipient() + " asked you to " + promise.what() + due
+                    + ". Confirm to track it as your promise, or dismiss it.", List.of("confirm", "dismiss"), "announce");
         } else {
             notify(promise.owner(), "Did you promise to " + promise.what() + due + "? Confirm and I'll keep track.",
                     List.of("confirm", "dismiss"), "announce");
