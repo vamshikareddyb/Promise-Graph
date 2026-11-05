@@ -159,11 +159,11 @@ class ReplayTest {
             }
             env.sleep(Duration.ofMinutes(5));
 
-            // Karan's handoff: Nikhil accepts, covers, hands back. Omar's promise is missed.
+            // Karan's handoff: his lead Aditi approves Nikhil as cover; he covers and hands back. Omar's promise is missed.
             env.sleep(Duration.ofDays(1));
-            InboxItem cover = stack.inbox.inbox("demo", "nikhil", true).stream().filter(i -> i.text().startsWith("Can you cover"))
+            InboxItem plan = stack.inbox.inbox("demo", "aditi", true).stream().filter(i -> i.actions().contains("approve plan"))
                     .findFirst().orElseThrow();
-            stack.inboxService.act("demo", cover.key(), new InboxService.ActionRequest("accept", "nikhil", null, null));
+            stack.inboxService.act("demo", plan.key(), new InboxService.ActionRequest("approve plan", "aditi", null, null));
             env.sleep(Duration.ofDays(10));
             client.newWorkflowStub(DigestWorkflow.class, WorkflowOptions.newBuilder().setWorkflowId("digest-story")
                     .setTaskQueue(TASK_QUEUE_MAIN).build()).run("demo");

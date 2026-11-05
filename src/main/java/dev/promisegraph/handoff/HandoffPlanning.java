@@ -48,7 +48,7 @@ public final class HandoffPlanning {
     /** @param proposedOwner null when nobody suitable is available; the lead then decides */
     public record Item(String promiseId, String what, String due, String brief, String proposedOwner, String reason, List<String> candidates) {}
 
-    /** @param decider who chooses cover when nobody is proposed or someone declines: the team lead, else the person leaving */
+    /** @param decider who assigns the promises and approves the plan: the team lead, else an admin, else the person */
     public record Plan(String handoffId, String person, List<Item> items, String planner, String decider) {
 
         public Plan {
@@ -60,9 +60,13 @@ public final class HandoffPlanning {
         Plan plan(Context ctx);
     }
 
-    /** The team lead decides open questions; someone outside the directory decides for themselves. */
+    /**
+     * Who assigns the person's promises: their team lead; for a lead, or someone with no lead, an
+     * admin; and only when there is nobody else, the person themselves.
+     */
     public static String decider(Context ctx) {
         return ctx.directory().leadOf(ctx.person()).filter(l -> !l.equals(ctx.person()) && !ctx.unavailable().contains(l))
+                .or(() -> ctx.directory().admins().stream().filter(a -> !a.equals(ctx.person()) && !ctx.unavailable().contains(a)).findFirst())
                 .orElse(ctx.person());
     }
 

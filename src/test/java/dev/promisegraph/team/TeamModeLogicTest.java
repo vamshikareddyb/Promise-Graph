@@ -13,6 +13,8 @@ import dev.promisegraph.gmail.GmailMessage;
 import dev.promisegraph.handoff.Absence;
 import dev.promisegraph.handoff.AbsenceDetector;
 import dev.promisegraph.handoff.Directory;
+import dev.promisegraph.handoff.HandoffPlanning;
+import dev.promisegraph.handoff.HandoffRecord;
 import dev.promisegraph.privacy.Visibility;
 import java.util.ArrayList;
 import java.util.List;
@@ -101,5 +103,28 @@ class TeamModeLogicTest {
                 new Member("demo", "a@x.com", "A", "", "", false, false, true, "t").person(),
                 new Member("demo", "b@x.com", "B", "", "", false, false, true, "t").person()));
         assertThat(dir.teammates("a@x.com")).isEmpty();
+    }
+
+    @Test
+    void anAdminAssignsForALeadAndNobodySeesTheirShareBeforeApproval() {
+        List<dev.promisegraph.domain.Person> people = List.of(
+                new Member("demo", "lead@x.com", "Lead", "platform", "Lead", true, false, true, "t").person(),
+                new Member("demo", "dev@x.com", "Dev", "platform", "Engineer", false, false, true, "t").person(),
+                new Member("demo", "admin@x.com", "Admin", "ops", "Admin", false, true, true, "t").person());
+        Directory dir = new Directory(() -> people, () -> List.of("admin@x.com"));
+        HandoffPlanning.Context forLead = new HandoffPlanning.Context("h", "lead@x.com", "2026-12-02", "2026-12-05", List.of(),
+                Map.of(), Map.of(), Map.of(), Set.of(), dir);
+        HandoffPlanning.Context forDev = new HandoffPlanning.Context("h", "dev@x.com", "2026-12-02", "2026-12-05", List.of(),
+                Map.of(), Map.of(), Map.of(), Set.of(), dir);
+        assertThat(HandoffPlanning.decider(forLead)).isEqualTo("admin@x.com"); // a lead's own leave goes to an admin
+        assertThat(HandoffPlanning.decider(forDev)).isEqualTo("lead@x.com");
+
+        Visibility v = Visibility.team(dir, who -> who.equals("admin@x.com"));
+        HandoffRecord deciding = new HandoffRecord("demo", "h", "lead@x.com", "2026-12-02", "2026-12-05", "leave", "awaiting_approval",
+                "rules", List.of(new HandoffRecord.ItemState("p1", "ship it", null, "b", "dev@x.com", null, "proposed", "same team")), "t");
+        assertThat(v.view("dev@x.com", deciding)).isEmpty(); // suggested, but nothing is theirs yet
+        assertThat(v.view("admin@x.com", deciding)).get().satisfies(h -> assertThat(h.items()).hasSize(1));
+        HandoffRecord approved = deciding.with("covered", List.of(deciding.items().get(0).accepted("dev@x.com")), "rules", "t2");
+        assertThat(v.view("dev@x.com", approved)).get().satisfies(h -> assertThat(h.items()).hasSize(1));
     }
 }

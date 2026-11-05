@@ -141,7 +141,8 @@ public class AppConfig {
             return new Directory(Company.PEOPLE);
         }
         TeamStore store = team.getObject();
-        return new Directory(() -> store.members(props.tenant()).stream().filter(Member::active).map(Member::person).toList());
+        return new Directory(() -> store.members(props.tenant()).stream().filter(Member::active).map(Member::person).toList(),
+                () -> store.members(props.tenant()).stream().filter(m -> m.active() && m.admin()).map(Member::email).toList());
     }
 
     // ------------------------------------------------------------ handoffs and the inbox

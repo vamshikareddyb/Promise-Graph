@@ -83,6 +83,7 @@ class DepartureWorkflowTest {
 
     @Test
     void theLeadApprovesThenPromisesMoveForGood() {
+        String due = inDays(30);
         track("faq", "karan", "write the launch FAQ for support", 30);
         Absence leaving = new Absence("demo", "karan", inDays(5), null, AbsenceDetector.DEPARTURE_REASON, "test");
         String lastDay = inDays(4);
@@ -93,16 +94,14 @@ class DepartureWorkflowTest {
         assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_approval");
         InboxItem approval = openItem("aditi", "karan is leaving: their last day is " + lastDay);
         assertThat(approval.actions()).containsExactly("approve plan");
-        assertThat(approval.text()).contains("write the launch FAQ for support → nikhil");
-        assertThat(hasItem("nikhil", "take over")).isFalse();
+        assertThat(approval.text()).contains("write the launch FAQ for support (due " + due + ") → suggested: nikhil");
+        assertThat(hasItem("nikhil", "assigned you")).isFalse();
 
         click(approval, "approve plan", "aditi");
         env.sleep(Duration.ofMinutes(1));
-        assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_cover");
-        InboxItem ask = openItem("nikhil", "Can you take over \"write the launch FAQ for support\"");
-        assertThat(ask.text()).contains("It becomes your promise for good");
-        assertThat(openItem("karan", "aditi approved the handover")).isNotNull();
-        click(ask, "accept", "nikhil");
+        assertThat(handoff(leaving).state().status()).isEqualTo("covered");
+        assertThat(openItem("nikhil", "aditi assigned you \"write the launch FAQ for support\"").text()).contains("for good");
+        assertThat(openItem("karan", "aditi assigned your open promises")).isNotNull();
 
         // The day after the last day it moves, and it never comes back.
         env.sleep(Duration.ofDays(3));
@@ -121,20 +120,16 @@ class DepartureWorkflowTest {
         env.sleep(Duration.ofDays(6)); // past the last day, still unapproved
         assertThat(promiseWf("faq").state().owner()).isEqualTo("karan");
         assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_approval");
-        InboxItem late = openItem("aditi", "has left and their 1 open promise(s) haven't moved yet");
+        InboxItem late = openItem("aditi", "has left and their 1 open promise(s) aren't assigned yet");
 
-        // Someone other than the lead can't approve.
-        handoff(leaving).respond(new Contracts.HandoffResponse("approve plan", "plan", "zoya", null, "web:approve-zoya"));
+        // The person leaving can't approve their own handover.
+        handoff(leaving).respond(new Contracts.HandoffResponse("approve plan", "plan", "karan", null, "web:approve-karan"));
         env.sleep(Duration.ofMinutes(1));
         assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_approval");
 
         click(late, "approve plan", "aditi");
         env.sleep(Duration.ofMinutes(1));
-        click(openItem("nikhil", "Can you take over"), "accept", "nikhil");
-        env.sleep(Duration.ofHours(2));
-        assertThat(promiseWf("faq").state().owner()).isEqualTo("karan"); // approved late: the new owner gets a day to answer
-        env.sleep(Duration.ofDays(1));
-        assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil");
+        assertThat(promiseWf("faq").state().owner()).isEqualTo("nikhil"); // approved after the last day: it moves at once
         assertThat(handoff(leaving).state().status()).isEqualTo("handed_over");
     }
 }
