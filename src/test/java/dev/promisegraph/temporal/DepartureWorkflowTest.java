@@ -88,7 +88,7 @@ class DepartureWorkflowTest {
         String lastDay = inDays(4);
         stack.scheduler.schedule(leaving);
 
-        // Three days ahead: the plan goes to Karan's lead (Aditi) first. Nobody is asked yet.
+        // The plan goes to Karan's lead (Aditi) first. Nobody is asked yet.
         env.sleep(Duration.ofDays(3));
         assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_approval");
         InboxItem approval = openItem("aditi", "karan is leaving: their last day is " + lastDay);

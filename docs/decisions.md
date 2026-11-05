@@ -227,3 +227,14 @@ without approval, nothing moves and the lead is told once; after a late approval
 day to answer. Promises move the day after the last day and never come back. The workflow change is
 behind `getVersion("departure-approval")`.
 
+
+## 33. Leave cover is asked for when the leave is entered
+
+Cover used to be planned three days before a leave started, so a leave entered weeks ahead seemed to
+do nothing, and a leave starting tomorrow handed over before anyone could answer (late answers were
+ignored). Now the plan and the asks go out as soon as the absence is known. On the first day away,
+promises made since then are planned and asked for too, and a cover who answers after the start
+takes the promise over at once; the lead is told who hasn't answered yet. If someone has no open
+promises when the leave is entered, the workflow looks again a few days before. Both changes are
+behind `getVersion("plan-on-apply")` and `getVersion("late-accept")`, so running handoffs keep their
+old timing.
