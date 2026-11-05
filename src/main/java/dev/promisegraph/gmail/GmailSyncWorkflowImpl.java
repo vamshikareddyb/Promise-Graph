@@ -45,7 +45,7 @@ public class GmailSyncWorkflowImpl implements GmailSyncWorkflow {
         state = initial;
         for (int round = 0; round < ROUNDS_BEFORE_CONTINUE; round++) {
             FetchResult result = gmail.fetchNewEmails(
-                    new FetchRequest(state.tenant(), state.historyId(), state.backfillDays(), MAX_MESSAGES_PER_FETCH));
+                    new FetchRequest(state.tenant(), state.historyId(), state.backfillDays(), MAX_MESSAGES_PER_FETCH, state.mailbox()));
             extract(result.messages());
             state = state.withProgress(result.nextHistoryId(), result.messages().size());
             if (result.resynced()) {

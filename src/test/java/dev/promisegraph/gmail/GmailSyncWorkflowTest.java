@@ -71,7 +71,7 @@ class GmailSyncWorkflowTest {
     void emailsBecomePromisesAndTheCursorAdvances() {
         GmailSyncWorkflow wf = env.getWorkflowClient().newWorkflowStub(GmailSyncWorkflow.class,
                 WorkflowOptions.newBuilder().setWorkflowId("gmail-sync-demo").setTaskQueue(TASK_QUEUE_MAIN).build());
-        WorkflowClient.start(wf::run, new SyncState("demo", null, 60, 2, 0));
+        WorkflowClient.start(wf::run, new SyncState("demo", null, 60, 2, 0, null));
 
         env.sleep(Duration.ofMinutes(3)); // three polling rounds
 
@@ -91,7 +91,7 @@ class GmailSyncWorkflowTest {
     void syncNowSkipsTheWait() {
         GmailSyncWorkflow wf = env.getWorkflowClient().newWorkflowStub(GmailSyncWorkflow.class,
                 WorkflowOptions.newBuilder().setWorkflowId("gmail-sync-now").setTaskQueue(TASK_QUEUE_MAIN).build());
-        WorkflowClient.start(wf::run, new SyncState("demo", null, 3600, 2, 0));
+        WorkflowClient.start(wf::run, new SyncState("demo", null, 3600, 2, 0, null));
         env.sleep(Duration.ofSeconds(5));
         int before = gmail.cursorsRequested.size();
 

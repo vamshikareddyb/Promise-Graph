@@ -1,5 +1,6 @@
 package dev.promisegraph.gmail;
 
+import dev.promisegraph.domain.Ids;
 import dev.promisegraph.domain.Message;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -57,6 +58,15 @@ public final class GmailMapper {
 
     /** The message to process, or empty if the email is skipped or has no text of its own. */
     public static Optional<Message> toMessage(GmailMessage m, String tenant) {
+        return toMessage(m, tenant, null);
+    }
+
+    /**
+     * As above, for one mailbox among several (team mode). The mailbox goes into the message ID,
+     * because the same email arrives in the sender's and each recipient's mailbox and each copy is
+     * read for that person, and into the channel, so later steps know whose mailbox "you" is.
+     */
+    public static Optional<Message> toMessage(GmailMessage m, String tenant, String mailbox) {
         if (skipReason(m).isPresent()) {
             return Optional.empty();
         }
@@ -66,6 +76,8 @@ public final class GmailMapper {
         }
         String ts = Instant.ofEpochMilli(m.internalDate()).atOffset(ZoneOffset.UTC).toString();
         // One batching channel per thread keeps a conversation's messages together.
-        return Optional.of(new Message("gmail-" + m.id(), "email:" + m.threadId(), address(m.header("From")), ts, text, tenant));
+        String id = mailbox == null ? "gmail-" + m.id() : "gmail-" + Ids.hash(mailbox) + "-" + m.id();
+        String channel = mailbox == null ? "email:" + m.threadId() : "email:" + mailbox + ":" + m.threadId();
+        return Optional.of(new Message(id, channel, address(m.header("From")), ts, text, tenant));
     }
 }

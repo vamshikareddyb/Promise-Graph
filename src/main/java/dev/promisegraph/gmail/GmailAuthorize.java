@@ -28,13 +28,14 @@ public final class GmailAuthorize {
 
     private GmailAuthorize() {}
 
-    private static String random(int bytes) {
+    /** A random URL-safe string, for PKCE verifiers and state values. */
+    public static String random(int bytes) {
         byte[] b = new byte[bytes];
         new SecureRandom().nextBytes(b);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 
-    static String challenge(String verifier) {
+    public static String challenge(String verifier) {
         try {
             byte[] hash = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);

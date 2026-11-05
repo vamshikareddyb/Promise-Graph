@@ -42,7 +42,20 @@ public final class Requests {
 
     private Requests() {}
 
-    /** Emails only: their channel is {@code email:<thread>}. */
+    /**
+     * The mailbox a message was read from, in team mode, where channels look like
+     * {@code email:<mailbox>:<thread>}; empty for the single personal mailbox ({@code email:<thread>}).
+     */
+    public static Optional<String> mailboxOf(String channel) {
+        if (channel == null || !channel.startsWith("email:")) {
+            return Optional.empty();
+        }
+        String rest = channel.substring("email:".length());
+        int colon = rest.lastIndexOf(':');
+        return colon > 0 && rest.substring(0, colon).contains("@") ? Optional.of(rest.substring(0, colon)) : Optional.empty();
+    }
+
+    /** Emails only: their channel is {@code email:<thread>} or {@code email:<mailbox>:<thread>}. */
     public static boolean applies(Message m) {
         return m.channel() != null && m.channel().startsWith("email:");
     }
