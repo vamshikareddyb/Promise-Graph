@@ -83,6 +83,7 @@ class DepartureWorkflowTest {
 
     @Test
     void theLeadApprovesThenPromisesMoveForGood() {
+        String due = inDays(30);
         track("faq", "karan", "write the launch FAQ for support", 30);
         Absence leaving = new Absence("demo", "karan", inDays(5), null, AbsenceDetector.DEPARTURE_REASON, "test");
         String lastDay = inDays(4);
@@ -93,7 +94,7 @@ class DepartureWorkflowTest {
         assertThat(handoff(leaving).state().status()).isEqualTo("awaiting_approval");
         InboxItem approval = openItem("aditi", "karan is leaving: their last day is " + lastDay);
         assertThat(approval.actions()).containsExactly("approve plan");
-        assertThat(approval.text()).contains("write the launch FAQ for support (due " + inDays(30) + ") → suggested: nikhil");
+        assertThat(approval.text()).contains("write the launch FAQ for support (due " + due + ") → suggested: nikhil");
         assertThat(hasItem("nikhil", "assigned you")).isFalse();
 
         click(approval, "approve plan", "aditi");
