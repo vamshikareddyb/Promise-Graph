@@ -10,6 +10,7 @@ import dev.promisegraph.drafts.OllamaReplyDrafter;
 import dev.promisegraph.drafts.ReplyDrafter;
 import dev.promisegraph.drafts.TemplateReplyDrafter;
 import dev.promisegraph.extraction.Extractor;
+import dev.promisegraph.extraction.FallbackExtractor;
 import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.extraction.model.AnthropicExtractor;
 import dev.promisegraph.gmail.MailboxOwner;
@@ -183,7 +184,7 @@ public class AppConfig {
             Optional<String> key = claudeKey(env);
             if (key.isPresent()) {
                 log.info("promise extraction: Claude ({})", props.model());
-                return new AnthropicExtractor(key.get(), props.model(), 2000);
+                return new FallbackExtractor(new AnthropicExtractor(key.get(), props.model(), 2000), new RuleBasedExtractor());
             }
             noKey("promise extraction");
         }
