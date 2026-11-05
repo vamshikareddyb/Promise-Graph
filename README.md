@@ -111,7 +111,7 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PG_STORE` | `memory` | `jdbc` uses Postgres (`DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`) |
-| `ANTHROPIC_API_KEY` | empty | Claude, for every agent; without it each falls back to its rules |
+| `ANTHROPIC_API_KEY` | empty | Claude, for every agent; without it each falls back to its rules. Or save the key in `~/.promise-graph/anthropic-key.txt` |
 | `PG_MODEL` | `claude-sonnet-5-5` | The Claude model the agents use |
 | `PG_EXTRACTOR` | `llm` | Claude finds promises; `rules` uses the built-in patterns |
 | `PG_DRAFTS_AUTO` | `false` | `true`: also draft a reply to every email that brings a promise, without being asked |

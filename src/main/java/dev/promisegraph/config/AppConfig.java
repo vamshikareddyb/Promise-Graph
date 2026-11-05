@@ -131,11 +131,24 @@ public class AppConfig {
      * agent falls back to its rule-based version and says so in the log.
      */
     static Optional<String> claudeKey(Environment env) {
-        return Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(String::strip).filter(k -> !k.isEmpty());
+        Optional<String> fromEnv = Optional.ofNullable(env.getProperty("ANTHROPIC_API_KEY")).map(String::strip).filter(k -> !k.isEmpty());
+        if (fromEnv.isPresent()) {
+            return fromEnv;
+        }
+        // Saved once, so it works however the app is started (any terminal, the IDE, a script).
+        java.nio.file.Path file = java.nio.file.Path.of(System.getProperty("user.home"), ".promise-graph", "anthropic-key.txt");
+        try {
+            if (java.nio.file.Files.isRegularFile(file)) {
+                return Optional.of(java.nio.file.Files.readString(file).strip()).filter(k -> !k.isEmpty());
+            }
+        } catch (java.io.IOException e) {
+            log.warn("could not read {}: {}", file, e.getMessage());
+        }
+        return Optional.empty();
     }
 
     private static void noKey(String what) {
-        log.warn("ANTHROPIC_API_KEY is not set: {} uses the built-in rules instead of Claude", what);
+        log.warn("ANTHROPIC_API_KEY is not set (nor ~/.promise-graph/anthropic-key.txt): {} uses the built-in rules instead of Claude", what);
     }
 
     @Bean
@@ -162,7 +175,8 @@ public class AppConfig {
         }
         if ("claude".equals(drafts.writer())) {
             noKey("reply drafting");
-            return new TemplateReplyDrafter("ANTHROPIC_API_KEY is not set where the app was started");
+            return new TemplateReplyDrafter("the app has no Claude API key (set ANTHROPIC_API_KEY or save it in "
+                    + "~/.promise-graph/anthropic-key.txt, then restart)");
         }
         return new TemplateReplyDrafter("PG_DRAFTS_WRITER is set to template");
     }
