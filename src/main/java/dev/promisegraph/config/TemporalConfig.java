@@ -3,6 +3,7 @@ package dev.promisegraph.config;
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Extractor;
 import dev.promisegraph.gmail.GmailActivitiesImpl;
+import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.handoff.Directory;
 import dev.promisegraph.handoff.HandoffPlanning;
 import dev.promisegraph.handoff.HandoffScheduler;
@@ -46,6 +47,7 @@ import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
+import java.util.Optional;
 import java.time.Clock;
 import java.util.List;
 import org.slf4j.Logger;
@@ -89,8 +91,9 @@ public class TemporalConfig {
 
     @Bean
     PromiseActivitiesImpl promiseActivities(Repository repo, LinkStore links, Notifier notifier, TimingPolicy policy,
-            PromiseGraphProperties props, WorkflowClient client) {
-        return new PromiseActivitiesImpl(repo, links, notifier, policy, props.confidenceThreshold(), client);
+            PromiseGraphProperties props, WorkflowClient client, ObjectProvider<MailboxOwner> mailbox) {
+        return new PromiseActivitiesImpl(repo, links, notifier, policy, props.confidenceThreshold(), client,
+                () -> Optional.ofNullable(mailbox.getIfAvailable()).flatMap(MailboxOwner::email));
     }
 
     @Bean
