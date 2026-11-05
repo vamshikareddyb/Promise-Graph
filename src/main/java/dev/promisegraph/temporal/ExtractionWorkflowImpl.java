@@ -4,6 +4,8 @@ import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_LLM;
 
 import dev.promisegraph.domain.Commitment;
 import dev.promisegraph.domain.Message;
+import dev.promisegraph.drafts.DraftActivities;
+import dev.promisegraph.drafts.DraftContracts.DraftRequest;
 import dev.promisegraph.ingestion.ExtractionInput;
 import dev.promisegraph.temporal.Contracts.Action;
 import dev.promisegraph.temporal.Contracts.ClaimResult;
@@ -23,11 +25,15 @@ public class ExtractionWorkflowImpl implements ExtractionWorkflow {
     /** Phase 4 keeps failed batches as dead letters; histories recorded before it replay without it. */
     static final String DEAD_LETTER_CHANGE = "dead-letter-on-extraction-failure";
 
+    /** After the promises are recorded, the reply-draft agent drafts an answer to each email they came from. */
+    static final String DRAFT_REPLIES_CHANGE = "draft-replies-after-extraction";
+
     private final PromiseActivities io = Workflow.newActivityStub(PromiseActivities.class, RetryPolicies.io(Duration.ofSeconds(30)));
     private final PromiseActivities dispatch = Workflow.newActivityStub(PromiseActivities.class, RetryPolicies.io(Duration.ofMinutes(1)));
     private final ModelActivities model = Workflow.newActivityStub(ModelActivities.class, RetryPolicies.model(TASK_QUEUE_LLM));
     private final OpsActivities ops = Workflow.newActivityStub(OpsActivities.class, RetryPolicies.io(Duration.ofSeconds(30)));
     private final HandoffActivities handoffs = Workflow.newActivityStub(HandoffActivities.class, RetryPolicies.io(Duration.ofSeconds(30)));
+    private final DraftActivities drafts = Workflow.newActivityStub(DraftActivities.class, RetryPolicies.io(Duration.ofSeconds(30)));
 
     @Override
     public ExtractionResult run(ExtractionInput input) {
@@ -57,6 +63,12 @@ public class ExtractionWorkflowImpl implements ExtractionWorkflow {
         String now = Instant.ofEpochMilli(Workflow.currentTimeMillis()).toString();
         List<Action> actions = io.resolveCommitments(new ResolveRequest(input.tenant(), commitments, now));
         int dispatched = dispatch.dispatchActions(new DispatchRequest(input.tenant(), actions));
+        if (Workflow.getVersion(DRAFT_REPLIES_CHANGE, Workflow.DEFAULT_VERSION, 1) >= 1) {
+            List<DraftRequest> replies = DraftRequest.forEmails(input.tenant(), claimed, commitments);
+            if (!replies.isEmpty()) {
+                drafts.startDrafts(replies); // each draft runs as its own workflow; extraction doesn't wait
+            }
+        }
         return new ExtractionResult(input.messages().size(), claimed.size(), commitments.size(), dispatched);
     }
 }

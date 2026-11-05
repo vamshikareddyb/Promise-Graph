@@ -53,10 +53,16 @@ people read and answer everything in the web inbox (http://localhost:8787)
   `HandoffWorkflow`. Three days before, it plans who should cover each open promise, asks them,
   and escalates to the team lead if someone declines. On the first day away, accepted promises
   move to their cover; the day after the absence, they move back with a summary of what changed.
-- **The agents.** By default, handoff cover and recovery plans come from transparent rules. With
-  `PG_HANDOFF_PLANNER=agent` or `PG_NEGOTIATION_PLANNER=agent`, Claude plans instead, using
-  read-only tools, with a step limit and the same checks as the rules. Anything it doesn't settle
-  falls back to the rules.
+- **The agents.** Claude is the model behind every agent: it finds promises in messages, plans
+  handoff cover and proposes recovery plans, using read-only tools, with a step limit and the same
+  checks as the rules. Anything it doesn't settle falls back to the rules, and without
+  `ANTHROPIC_API_KEY` every agent uses its rules (the log says so at startup).
+- **Reply drafts.** After an email's promises are on the graph, a second agent drafts your reply: a
+  `DraftReplyWorkflow` reads the whole Gmail thread plus the promises around it (made in that thread,
+  and open ones between the same two people) and Claude writes a reply that confirms your promises
+  and dates, thanks the other person for theirs and leaves `[placeholders]` where only you can
+  decide. Drafts appear on the Drafts page; you edit, ask Claude to rewrite ("shorter"), copy into
+  Gmail and mark as sent. Nothing is ever sent for you, and no new Gmail permission is needed.
 
 | Package | What it holds |
 | --- | --- |
@@ -64,6 +70,7 @@ people read and answer everything in the web inbox (http://localhost:8787)
 | `extraction` | Commitment filter, date parsing, rule-based extractor; `model` validates and calls the model. |
 | `links` | Link suggestions and the ripple calculation. Pure logic. |
 | `handoff` | Absence detection, cover planning, the directory; `agent` is the Claude planner. |
+| `drafts` | The reply-draft agent: thread and promise context, the Claude writer, its workflow and store. |
 | `recovery` | Recovery plans: the rule planner, the option agent, the verifier. Pure logic. |
 | `inbox` | Inbox notifications and turning button presses into workflow signals. |
 | `ingestion`, `gmail` | The webhook gateway and the read-only Gmail sync. |
@@ -103,11 +110,16 @@ Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PG_STORE` | `memory` | `jdbc` uses Postgres (`DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`) |
-| `PG_EXTRACTOR` | `rules` | `llm` uses Claude to find promises (`ANTHROPIC_API_KEY`, `PG_MODEL`) |
-| `PG_HANDOFF_PLANNER` | `rules` | `agent` lets Claude plan handoff cover (`ANTHROPIC_API_KEY`) |
+| `ANTHROPIC_API_KEY` | empty | Claude, for every agent; without it each falls back to its rules |
+| `PG_MODEL` | `claude-sonnet-5-5` | The Claude model the agents use |
+| `PG_EXTRACTOR` | `llm` | Claude finds promises; `rules` uses the built-in patterns |
+| `PG_DRAFTS_ENABLED` | `true` | Draft a reply to each email that brings a promise or a request |
+| `PG_DRAFTS_WRITER` | `claude` | `template`: a plain acknowledgement, no model |
+| `PG_DRAFTS_MODEL` | empty | A different Claude model for drafts (empty: `PG_MODEL`) |
+| `PG_HANDOFF_PLANNER` | `agent` | Claude plans handoff cover; `rules` uses the built-in rules |
 | `PG_HANDOFF_PREP_DAYS` | `3` | How many days before an absence to plan cover |
 | `PG_NEGOTIATION_ENABLED` | `true` | `false`: slips only warn, as in Phase 2 |
-| `PG_NEGOTIATION_PLANNER` | `rules` | `agent` lets Claude propose recovery plans (`ANTHROPIC_API_KEY`) |
+| `PG_NEGOTIATION_PLANNER` | `agent` | Claude proposes recovery plans; `rules` uses the built-in rules |
 | `PG_NEGOTIATION_MIN_TEAMS` | `2` | A slip affecting this many teams starts a negotiation (a customer promise always does) |
 | `PG_NEGOTIATION_CAPACITY` | `8` | The most open promises a plan may give one person |
 | `PG_NEGOTIATION_APPROVAL_HOURS` | `72` | How long leads have to choose, per round (reminder after 24) |

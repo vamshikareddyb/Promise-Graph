@@ -27,7 +27,7 @@ public final class GmailMapper {
     private GmailMapper() {}
 
     /** The bare address from a header like {@code "Neha Kapoor <neha@example.com>"}, lower-cased. */
-    static String address(String header) {
+    public static String address(String header) {
         if (header == null || header.isBlank()) {
             return null;
         }

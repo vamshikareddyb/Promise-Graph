@@ -1,5 +1,10 @@
 package dev.promisegraph;
 
+import dev.promisegraph.drafts.DraftActivitiesImpl;
+import dev.promisegraph.drafts.DraftWriterActivitiesImpl;
+import dev.promisegraph.drafts.InMemoryDraftStore;
+import dev.promisegraph.drafts.TemplateReplyDrafter;
+import java.util.Optional;
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.handoff.Directory;
@@ -46,6 +51,7 @@ public final class TestStack {
     public final InMemoryStores.Negotiations negotiations = new InMemoryStores.Negotiations();
     public final InMemoryStores.DeadLetters deadLetters = new InMemoryStores.DeadLetters();
     public final InMemoryStores.Audit audit = new InMemoryStores.Audit();
+    public final InMemoryDraftStore drafts = new InMemoryDraftStore();
     public final RecordingNotifier recorded = new RecordingNotifier();
     public final Directory directory = new Directory(Company.PEOPLE);
     public final Clock clock;
@@ -124,13 +130,16 @@ public final class TestStack {
                 new PlanningActivitiesImpl(planner, repo, links, handoffs, directory),
                 negotiationActivities,
                 new RecoveryActivitiesImpl(recoveryPlanner, situations),
-                new OpsActivitiesImpl(repo, deadLetters, audit, client, TimingPolicy.defaults(), 0.8));
+                new OpsActivitiesImpl(repo, deadLetters, audit, client, TimingPolicy.defaults(), 0.8),
+                // No Gmail in tests: drafts use the email itself, written by the template (no model).
+                new DraftActivitiesImpl(true, client, repo, drafts, mailbox -> Optional.empty(), Optional::empty, clock),
+                new DraftWriterActivitiesImpl(new TemplateReplyDrafter()));
     }
 
     /** The same wiring with different negotiation activities, e.g. one that fails a step. */
     public Workers.Activities withNegotiations(NegotiationActivities replacement) {
         return new Workers.Activities(activities.promises(), activities.links(), activities.handoffs(), activities.model(),
-                activities.planning(), replacement, activities.recovery(), activities.ops());
+                activities.planning(), replacement, activities.recovery(), activities.ops(), activities.drafts(), activities.draftWriter());
     }
 
     public WorkflowClient client() {

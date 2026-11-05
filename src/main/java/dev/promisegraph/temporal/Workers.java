@@ -3,6 +3,9 @@ package dev.promisegraph.temporal;
 import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_LLM;
 import static dev.promisegraph.config.PromiseGraphProperties.TASK_QUEUE_MAIN;
 
+import dev.promisegraph.drafts.DraftActivities;
+import dev.promisegraph.drafts.DraftReplyWorkflowImpl;
+import dev.promisegraph.drafts.DraftWriterActivities;
 import dev.promisegraph.gmail.GmailSyncWorkflowImpl;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerOptions;
@@ -22,7 +25,9 @@ public final class Workers {
             PlanningActivities planning,
             NegotiationActivities negotiations,
             RecoveryActivities recovery,
-            OpsActivities ops) {}
+            OpsActivities ops,
+            DraftActivities drafts,
+            DraftWriterActivities draftWriter) {}
 
     /**
      * @param newWorker creates a worker for a task queue, e.g. {@code factory::newWorker}
@@ -33,14 +38,14 @@ public final class Workers {
         Worker main = newWorker.apply(TASK_QUEUE_MAIN, WorkerOptions.getDefaultInstance());
         main.registerWorkflowImplementationTypes(ExtractionWorkflowImpl.class, PromiseWorkflowImpl.class,
                 DigestWorkflowImpl.class, GmailSyncWorkflowImpl.class, RippleWorkflowImpl.class, HandoffWorkflowImpl.class,
-                NegotiationWorkflowImpl.class, TeamWorkflowImpl.class, ReconcileWorkflowImpl.class);
+                NegotiationWorkflowImpl.class, TeamWorkflowImpl.class, ReconcileWorkflowImpl.class, DraftReplyWorkflowImpl.class);
         main.registerActivitiesImplementations(activities.promises(), activities.links(), activities.handoffs(), activities.negotiations(),
-                activities.ops());
+                activities.ops(), activities.drafts());
 
-        // Model calls (extraction, the handoff agent, the option agent) get their own queue and a concurrency cap.
+        // Model calls (extraction, the handoff agent, the option agent, reply drafts) get their own queue and a concurrency cap.
         Worker llm = newWorker.apply(TASK_QUEUE_LLM,
                 WorkerOptions.newBuilder().setMaxConcurrentActivityExecutionSize(modelConcurrency).build());
-        llm.registerActivitiesImplementations(activities.model(), activities.planning(), activities.recovery());
+        llm.registerActivitiesImplementations(activities.model(), activities.planning(), activities.recovery(), activities.draftWriter());
         return main;
     }
 }

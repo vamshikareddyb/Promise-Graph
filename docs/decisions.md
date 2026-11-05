@@ -248,3 +248,18 @@ approved, each promise is simply the new owner's: they're told, not asked. It mo
 away (or at once if approval comes later) and, for leave, back the day after. A lead's own absence,
 or that of someone with no lead, goes to an admin. Promises made after approval go to the lead to
 assign. Behind `getVersion("lead-assigns")`; the person away can't approve or assign their own.
+
+## 35. Claude by default, and a second agent that drafts replies
+
+Claude is now the default for extraction, handoff planning and recovery planning. A missing
+`ANTHROPIC_API_KEY` no longer stops the app: each agent logs that it is using its rules instead.
+
+After extraction records an email's promises, it starts a `DraftReplyWorkflow` per email (through an
+activity, so extraction never waits on a model). The workflow gathers context first (the Gmail thread,
+read with the existing read-only scope and redacted like everything else, plus promises from the
+same thread and open ones between the same two people), then asks Claude for the reply on the model
+queue, then saves it. It skips mail the person wrote, mail they already answered in Gmail, and mail
+already drafted. If Claude stays unavailable, a deterministic template still leaves a starting point.
+Drafts are only ever shown to the mailbox owner and are never sent: sending would need the
+`gmail.compose` scope and a person's explicit click, which can come later. The extraction change is
+behind `getVersion("draft-replies-after-extraction")`. Postgres needs `migrations/006_drafts.sql`.
