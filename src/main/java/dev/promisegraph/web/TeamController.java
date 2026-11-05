@@ -2,12 +2,15 @@ package dev.promisegraph.web;
 
 import dev.promisegraph.config.AuthProperties;
 import dev.promisegraph.config.PromiseGraphProperties;
+import dev.promisegraph.gmail.GmailSyncContracts;
+import dev.promisegraph.gmail.GmailSyncWorkflow;
 import dev.promisegraph.inbox.InboxService;
 import dev.promisegraph.ops.AuditEntry;
 import dev.promisegraph.privacy.Visibility;
 import dev.promisegraph.store.AuditLog;
 import dev.promisegraph.team.Member;
 import dev.promisegraph.team.TeamStore;
+import io.temporal.client.WorkflowClient;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,9 +39,13 @@ public class TeamController {
     private final Visibility visibility;
     private final AuditLog audit;
     private final String tenant;
+    private final ObjectProvider<WorkflowClient> client;
+    private final boolean workerEnabled;
 
     public TeamController(AuthProperties auth, ObjectProvider<TeamStore> team, Visibility visibility, AuditLog audit,
-            PromiseGraphProperties props) {
+            PromiseGraphProperties props, ObjectProvider<WorkflowClient> client) {
+        this.client = client;
+        this.workerEnabled = props.temporal().workerEnabled();
         this.auth = auth;
         this.team = team;
         this.visibility = visibility;
@@ -64,7 +71,21 @@ public class TeamController {
         out.put("name", m == null ? viewer : m.name());
         out.put("team", m == null ? "" : m.team());
         out.put("admin", visibility.canOperate(viewer));
+        out.put("gmailProblem", gmailProblem(viewer));
         return ResponseEntity.ok(out);
+    }
+
+    /** Why this person's mailbox can't be read right now, or null. */
+    private String gmailProblem(String email) {
+        WorkflowClient c = client.getIfAvailable();
+        if (!workerEnabled || c == null) {
+            return null;
+        }
+        try {
+            return c.newWorkflowStub(GmailSyncWorkflow.class, GmailSyncContracts.workflowId(tenant, email)).problem();
+        } catch (RuntimeException e) {
+            return null; // no sync yet, or Temporal busy: nothing useful to show
+        }
     }
 
     private TeamStore store() {

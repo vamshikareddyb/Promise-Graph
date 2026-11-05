@@ -12,6 +12,9 @@ import dev.promisegraph.gmail.GmailSyncContracts.SyncState;
 import dev.promisegraph.store.InMemoryRepository;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
+import io.temporal.client.WorkflowStub;
+import io.temporal.api.enums.v1.WorkflowExecutionStatus;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.testing.TestWorkflowEnvironment;
 import io.temporal.worker.Worker;
 import java.time.Duration;
@@ -30,6 +33,8 @@ class GmailSyncWorkflowTest {
     static final class ScriptedGmail implements GmailActivities {
         final List<String> cursorsRequested = new ArrayList<>();
         final String ts;
+        /** How many fetches Google refuses first, as when the Gmail permission wasn't granted. */
+        int denials;
 
         ScriptedGmail(String ts) {
             this.ts = ts;
@@ -38,6 +43,11 @@ class GmailSyncWorkflowTest {
         @Override
         public synchronized FetchResult fetchNewEmails(FetchRequest request) {
             cursorsRequested.add(String.valueOf(request.historyId()));
+            if (denials > 0) {
+                denials--;
+                throw ApplicationFailure.newNonRetryableFailure(
+                        "Gmail rejected the request (403: Request had insufficient authentication scopes.)", "GmailAccessDenied");
+            }
             if (request.historyId() == null) {
                 Message email = new Message("gmail-1", "email:t1", "alice@example.com", ts,
                         "Hi,\nI'll send the signed contract by Friday.\nAlice", request.tenant());
@@ -98,5 +108,28 @@ class GmailSyncWorkflowTest {
         wf.syncNow();
         env.sleep(Duration.ofSeconds(5)); // far less than the one-hour poll interval
         assertThat(gmail.cursorsRequested.size()).isGreaterThan(before);
+    }
+
+    @Test
+    void refusedAccessWaitsForTheNextSignInInsteadOfFailing() {
+        gmail.denials = 1;
+        GmailSyncWorkflow wf = env.getWorkflowClient().newWorkflowStub(GmailSyncWorkflow.class,
+                WorkflowOptions.newBuilder().setWorkflowId("gmail-sync-demo-denied").setTaskQueue(TASK_QUEUE_MAIN).build());
+        WorkflowClient.start(wf::run, SyncState.forAccount("demo", "alice@example.com", 60, 2));
+        env.sleep(Duration.ofMinutes(5));
+
+        assertThat(wf.problem()).contains("insufficient authentication scopes");
+        assertThat(gmail.cursorsRequested).hasSize(1); // waiting, not hammering Google
+        WorkflowExecutionStatus status = env.getWorkflowClient().getWorkflowServiceStubs().blockingStub()
+                .describeWorkflowExecution(io.temporal.api.workflowservice.v1.DescribeWorkflowExecutionRequest.newBuilder()
+                        .setNamespace(env.getNamespace())
+                        .setExecution(WorkflowStub.fromTyped(wf).getExecution()).build())
+                .getWorkflowExecutionInfo().getStatus();
+        assertThat(status).isEqualTo(WorkflowExecutionStatus.WORKFLOW_EXECUTION_STATUS_RUNNING);
+
+        wf.syncNow(); // what signing in again sends
+        env.sleep(Duration.ofSeconds(30));
+        assertThat(wf.problem()).isNull();
+        assertThat(wf.state().processed()).isEqualTo(1);
     }
 }

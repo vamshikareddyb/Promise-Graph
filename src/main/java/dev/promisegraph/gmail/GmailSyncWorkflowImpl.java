@@ -11,6 +11,8 @@ import dev.promisegraph.ingestion.ExtractionInput;
 import dev.promisegraph.temporal.ExtractionWorkflow;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
+import io.temporal.failure.ActivityFailure;
+import io.temporal.failure.ApplicationFailure;
 import io.temporal.workflow.ChildWorkflowOptions;
 import io.temporal.workflow.Workflow;
 import java.time.Duration;
@@ -23,6 +25,9 @@ public class GmailSyncWorkflowImpl implements GmailSyncWorkflow {
     static final int ROUNDS_BEFORE_CONTINUE = 100;
     static final int MAX_MESSAGES_PER_FETCH = 50;
     static final int BATCH_SIZE = 20;
+    /** After access is refused, try again this often, or as soon as the person signs in again. */
+    static final Duration ACCESS_RETRY = Duration.ofMinutes(30);
+    static final String WAIT_ON_ACCESS_DENIED = "wait-on-access-denied";
 
     private static final Logger log = Workflow.getLogger(GmailSyncWorkflowImpl.class);
 
@@ -39,13 +44,16 @@ public class GmailSyncWorkflowImpl implements GmailSyncWorkflow {
 
     private SyncState state;
     private boolean syncRequested;
+    private String problem;
 
     @Override
     public void run(SyncState initial) {
         state = initial;
         for (int round = 0; round < ROUNDS_BEFORE_CONTINUE; round++) {
-            FetchResult result = gmail.fetchNewEmails(
-                    new FetchRequest(state.tenant(), state.historyId(), state.backfillDays(), MAX_MESSAGES_PER_FETCH, state.mailbox()));
+            FetchResult result = fetch();
+            if (result == null) {
+                continue; // access refused: waited, now try again
+            }
             extract(result.messages());
             state = state.withProgress(result.nextHistoryId(), result.messages().size());
             if (result.resynced()) {
@@ -57,6 +65,32 @@ public class GmailSyncWorkflowImpl implements GmailSyncWorkflow {
             syncRequested = false; // a request that arrived during this round is covered by the next fetch
         }
         Workflow.continueAsNew(state);
+    }
+
+    /**
+     * Fetches new mail. When Google refuses access (Gmail permission not granted, or access revoked),
+     * the sync waits instead of failing, so signing in again picks up where it stopped. Returns null
+     * after such a wait.
+     */
+    private FetchResult fetch() {
+        try {
+            FetchResult result = gmail.fetchNewEmails(
+                    new FetchRequest(state.tenant(), state.historyId(), state.backfillDays(), MAX_MESSAGES_PER_FETCH, state.mailbox()));
+            problem = null;
+            return result;
+        } catch (ActivityFailure e) {
+            if (!(e.getCause() instanceof ApplicationFailure af) || !"GmailAccessDenied".equals(af.getType())
+                    || Workflow.getVersion(WAIT_ON_ACCESS_DENIED, Workflow.DEFAULT_VERSION, 1) == Workflow.DEFAULT_VERSION) {
+                throw e;
+            }
+            problem = af.getOriginalMessage();
+            log.warn("Gmail{} can't be read: {}; trying again after the next sign-in or in {}",
+                    state.mailbox() == null ? "" : " " + state.mailbox(), problem, ACCESS_RETRY);
+            syncRequested = false;
+            Workflow.await(ACCESS_RETRY, () -> syncRequested);
+            syncRequested = false;
+            return null;
+        }
     }
 
     /** One child extraction per batch, in order. Child IDs come from message IDs, so a replay restarts nothing new. */
@@ -78,5 +112,10 @@ public class GmailSyncWorkflowImpl implements GmailSyncWorkflow {
     @Override
     public SyncState state() {
         return state;
+    }
+
+    @Override
+    public String problem() {
+        return problem;
     }
 }

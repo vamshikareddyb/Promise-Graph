@@ -44,6 +44,11 @@ Get-Content migrations\005_team.sql | docker compose exec -T app-db psql -U prom
 Open http://localhost:8787 and click **Sign in with Google**. **The first person to sign in becomes
 an admin.**
 
+On Google's consent screen, each permission has its own checkbox. **Tick "View your email messages
+and settings"** (or "Select all"). Without it the app can't read the mailbox, so it asks you to sign in
+again. If access is withdrawn later, the page shows a banner, and that person's mail reading waits
+(instead of stopping) until they sign in again.
+
 Stored sign-ins are encrypted. The key is created at `~/.promise-graph/secret.key` on first start,
 or set it yourself with `PG_SECRET_KEY` (32 random bytes, base64). If the key is lost, everyone just
 signs in again.
