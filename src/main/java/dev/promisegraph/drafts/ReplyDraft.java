@@ -38,9 +38,18 @@ public record ReplyDraft(
         status = status == null ? "ready" : status;
     }
 
-    /** One draft per email, so a retried or replayed workflow never makes a second one. */
-    public static String idFor(String tenant, String sourceMessageId) {
-        return "draft-" + Ids.notificationKey("draft", tenant, sourceMessageId);
+    /**
+     * One draft per email (a reply) or per promise (a follow-up), so a retried or replayed workflow
+     * never makes a second one.
+     *
+     * @param key {@link DraftContracts.DraftRequest#key()}
+     */
+    public static String idFor(String tenant, String key) {
+        return "draft-" + Ids.notificationKey("draft", tenant, key);
+    }
+
+    public static String forPromise(String tenant, String promiseId) {
+        return idFor(tenant, "promise-" + promiseId);
     }
 
     public static ReplyDraft of(DraftContext ctx, Written written, String now) {
@@ -48,8 +57,9 @@ public record ReplyDraft(
         if (!subject.toLowerCase(Locale.ROOT).startsWith("re:")) {
             subject = "Re: " + subject;
         }
-        List<String> promiseIds = ctx.promises().stream().filter(PromiseNote::thisThread).map(PromiseNote::id).toList();
-        return new ReplyDraft(idFor(ctx.tenant(), ctx.sourceMessageId()), ctx.tenant(), ctx.owner(), ctx.mailbox(), ctx.threadId(),
+        List<String> promiseIds = ctx.focusPromiseId() != null ? List.of(ctx.focusPromiseId())
+                : ctx.promises().stream().filter(PromiseNote::thisThread).map(PromiseNote::id).toList();
+        return new ReplyDraft(idFor(ctx.tenant(), ctx.key()), ctx.tenant(), ctx.owner(), ctx.mailbox(), ctx.threadId(),
                 ctx.channel(), ctx.sourceMessageId(), ctx.replyTo(), subject, written.body(), "ready", promiseIds, written.by(), now, now);
     }
 

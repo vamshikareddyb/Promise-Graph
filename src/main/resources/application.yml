@@ -44,7 +44,7 @@ promisegraph:
     team-checks: ${PG_NEGOTIATION_TEAM_CHECKS:true}
   # Claude is the model for every agent. Without ANTHROPIC_API_KEY each one falls back to its rules.
   drafts:
-    enabled: ${PG_DRAFTS_ENABLED:true}       # draft a reply to each email that produced a promise
+    auto: ${PG_DRAFTS_AUTO:false}            # true: also draft a reply to every email with a promise, unasked
     writer: ${PG_DRAFTS_WRITER:claude}       # claude | template
     model: ${PG_DRAFTS_MODEL:}               # empty: same model as extraction
     max-tokens: ${PG_DRAFTS_MAX_TOKENS:1200}

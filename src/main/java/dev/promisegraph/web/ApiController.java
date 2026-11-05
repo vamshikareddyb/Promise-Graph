@@ -70,10 +70,11 @@ public class ApiController {
      * @param recipient who the promise was made to, if known
      * @param handoff why the current owner has it, when it was handed over: "Covering for neha while
      *     she's on leave (2026-11-16 to 2026-11-27)" or "Taken over from neha, who left on 2026-11-21"
+     * @param canDraft it came from an email in the viewer's own mailbox, so a follow-up can be drafted
      */
     public record PromiseView(String id, String owner, String what, String due, String status, String createdAt,
             String latestQuote, List<String> dependsOn, List<String> blocks, String recipient, String handoff, String updatedAt,
-            boolean canComplete) {}
+            boolean canComplete, boolean canDraft) {}
 
     public record LinkView(String from, String to, String status, String reason, String fromWhat, String fromOwner,
             String toWhat, String toOwner, String decidedBy) {}
@@ -199,13 +200,16 @@ public class ApiController {
             }
         }
         Map<String, String> handedOver = handoffNotes();
+        java.util.Optional<String> personal = java.util.Optional.ofNullable(mailbox.getIfAvailable()).flatMap(MailboxOwner::email);
         return ps.stream()
                 .sorted(Comparator.comparing((Promise p) -> p.due() == null ? "9999" : p.due()).thenComparing(Promise::id))
                 .map(p -> new PromiseView(p.id(), p.owner(), p.what(), p.due(), p.status().dbValue(), p.createdAt(),
                         p.evidence().isEmpty() || !visibility.canSeeQuotes(viewer, p) ? null : p.evidence().get(p.evidence().size() - 1).quote(),
                         dependsOn.getOrDefault(p.id(), List.of()), blocks.getOrDefault(p.id(), List.of()), p.recipient(),
                         handedOver.get(p.id() + "\u001f" + p.owner()), p.updatedAt(),
-                        p.status().isOpen() && (p.owner().equals(viewer) || visibility.canOperate(viewer))))
+                        p.status().isOpen() && (p.owner().equals(viewer) || visibility.canOperate(viewer)),
+                        DraftsController.emailEvidence(p).flatMap(e -> DraftsController.mailboxOf(e, personal))
+                                .map(viewer::equalsIgnoreCase).orElse(false)))
                 .toList();
     }
 

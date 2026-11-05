@@ -75,10 +75,8 @@
              border-radius: 8px; background: var(--bg); color: var(--ink); resize: vertical; }
   textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .draft-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
-  .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--soft); color: var(--ink); }
-  .tab-count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--accent);
-               color: var(--accent-ink); font-size: 11px; line-height: 18px; text-align: center; font-weight: 600; }
+  tr.fu-row > td { background: var(--soft); padding: 14px 16px; }
+  tr.fu-row textarea { background: var(--panel); margin-top: 8px; }
 </style>
 <script>
   // Before first paint, so a saved theme never flashes the other one.
@@ -90,12 +88,10 @@
   <h1>Promise Graph</h1>
   <nav id="tabs">
     <button data-tab="inbox" class="on">Inbox</button>
-    <button data-tab="drafts">Drafts<span class="tab-count" id="draftCount" hidden></span></button>
     <button data-tab="promises">Promises</button>
     <button data-tab="links">Links</button>
     <button data-tab="graph">Graph</button>
     <button data-tab="handoffs">Handoffs</button>
-    <button data-tab="plans">Plans</button>
     <button data-tab="ops">Ops</button>
     <button data-tab="team" id="teamTab" hidden>People</button>
   </nav>
@@ -193,10 +189,13 @@ async function renderPromises() {
     ${linksNote(p) ? `<div class="meta">${esc(linksNote(p))}</div>` : ''}`;
   $view.innerHTML = `
     <h2>Promises</h2>
-    <p class="lead">${open.length} open, soonest due first. Mark one done when it's finished; it moves to the history below.</p>
-    ${open.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Done?</th></tr></thead><tbody>
-      ${open.map(p => `<tr><td>${about(p)}</td><td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${promisePill(p.status)}</td>
-        <td>${p.canComplete ? `<button class="act" data-done="${esc(p.id)}">Mark done</button><div class="err"></div>` : ''}</td></tr>`).join('')}
+    <p class="lead">${open.length} open, soonest due first. Mark one done when it's finished; it moves to the history below.
+      For a promise from an email, Claude can draft a follow-up from the whole thread.</p>
+    ${open.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Follow-up</th></tr></thead><tbody>
+      ${open.map(p => `<tr><td>${about(p)}</td><td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td>
+        <td>${p.canComplete ? `<button class="act" data-done="${esc(p.id)}" title="Currently ${esc(PROMISE_LABEL[p.status] || p.status)}">Mark done</button><div class="err"></div>` : promisePill(p.status)}</td>
+        <td>${p.canDraft ? `<button class="act ${followUps[p.id] ? 'primary' : ''}" data-draft-for="${esc(p.id)}">${followUps[p.id] ? 'Hide draft' : 'Draft a follow-up'}</button>` : ''}</td></tr>
+        ${followUps[p.id] ? `<tr data-fu-row="${esc(p.id)}" class="fu-row"><td colspan="5">${followUpPanel(p.id)}</td></tr>` : ''}`).join('')}
       </tbody></table>` : '<div class="empty">No open promises. Send a message or connect Gmail.</div>'}
     <h2 class="section">Completed promises</h2>
     <div class="toolbar"><label><input type="checkbox" id="allP" ${state.allPromises ? 'checked' : ''}> Also show missed and cancelled</label></div>
@@ -205,6 +204,7 @@ async function renderPromises() {
         <td class="meta">${esc(String(p.updatedAt || '').slice(0, 10) || '—')}</td></tr>`).join('')}
       </tbody></table>` : '<div class="empty">Nothing completed yet.</div>'}`;
   document.getElementById('allP').onchange = e => { state.allPromises = e.target.checked; render(); };
+  wireFollowUps();
   $view.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => {
     b.disabled = true; b.textContent = 'Marking…';
     try {
@@ -349,68 +349,6 @@ async function renderHandoffs() {
 }
 const alertInline = (el, msg) => { const s = document.createElement('span'); s.className = 'err'; s.textContent = ' ' + msg; el.after(s); };
 
-// ------------------------------------------------------------ recovery plans
-const OPEN_NEGOTIATION = new Set(['planning', 'awaiting_approval', 'applying']);
-const KIND = { move_date: 'New date', keep_date: 'Keeps date', deliver_partial: 'First part on date', add_helper: 'Adds a helper', reassign: 'New owner' };
-
-function moveChange(m) {
-  if (m.kind === 'move_date') return `<span style="white-space:nowrap">${esc(m.fromDue || 'no date')} → <b>${esc(m.toDue)}</b></span>`;
-  if (m.kind === 'add_helper') return `${esc(name(m.person))} helps`;
-  if (m.kind === 'reassign') return `to ${esc(name(m.person))}`;
-  return `keeps ${esc(m.fromDue || 'no date')}`;
-}
-
-function planCard(n, p, canVote) {
-  const chosen = n.chosen === p.id && ['applied', 'applying', 'failed'].includes(n.status);
-  const voters = Object.entries(n.votes || {}).filter(([, v]) => v === p.id).map(([who]) => name(who));
-  return `<div class="plan ${chosen ? 'chosen' : ''}">
-    <h3>${esc(p.id)}) ${esc(p.title)} ${chosen ? pill(n.status === 'failed' ? 'failed' : 'applied') : ''}</h3>
-    <div>${esc(p.summary)}</div>
-    ${p.score ? `<div class="meta">Cost: ${esc(p.score.datesMoved)} date(s) moved, ${esc(p.score.customerDatesMoved)} for customers · ${esc(p.score.partials)} first-part deliveries · ${esc(p.score.peopleAdded)} people added · ${esc(p.score.daysLate)} days late in total · proposed by ${esc(p.proposedBy)}</div>` : ''}
-    <table style="margin-top:8px"><thead><tr><th>Promise</th><th>Owner</th><th>Change</th><th>Why</th></tr></thead><tbody>
-      ${p.moves.map(m => `<tr><td>${esc(m.what)}</td><td>${esc(name(m.owner))}</td><td><span class="meta">${esc(KIND[m.kind] || m.kind)}</span><br>${moveChange(m)}</td><td class="meta">${esc(m.note)}</td></tr>`).join('')}
-    </tbody></table>
-    ${voters.length ? `<div class="meta">Chosen by ${voters.map(esc).join(', ')}</div>` : ''}
-    ${canVote ? `<div class="row"><button class="act primary" data-vote="${esc(p.id)}" data-n="${esc(n.id)}" data-round="${n.round}">Approve plan ${esc(p.id)}</button></div>` : ''}
-  </div>`;
-}
-
-async function renderPlans() {
-  const ns = await api('/negotiations');
-  const body = n => {
-    const canVote = n.status === 'awaiting_approval' && n.approvers.includes(state.person);
-    const votes = n.approvers.map(a => `<span>${esc(name(a))}: ${n.votes[a] ? (n.votes[a] === 'reject' ? 'rejected' : 'plan ' + esc(n.votes[a])) : '<span class="meta">waiting</span>'}</span>`).join('');
-    return `<div class="card">
-      <div><b>${esc(n.sourceWhat)}</b> <span class="meta">(${esc(name(n.sourceOwner))})</span> ${esc(n.oldDue)} → ${esc(n.newDue)} ${pill(n.status)}
-        <span class="meta"> · round ${esc(n.round)}${n.planner ? ' · plans by ' + esc(n.planner) : ''}</span></div>
-      <p class="meta" style="margin:6px 0 0">${esc(n.context)}</p>
-      ${n.status === 'awaiting_approval' ? `<div class="votes"><span class="meta">Approvers:</span>${votes}<span class="meta">Deadline ${when(n.deadline)}</span></div>` : ''}
-      ${n.plans.map(p => planCard(n, p, canVote)).join('')}
-      ${canVote ? `<div class="row"><input type="text" placeholder="Why none of these? (optional)" aria-label="Reason" data-reason="${esc(n.id)}">
-        <button class="act" data-reject="${esc(n.id)}" data-round="${n.round}">Reject all</button><span class="err"></span></div>` : ''}
-      ${n.dropped.length ? `<details><summary>${n.dropped.length} plan(s) dropped by the checks</summary>
-        ${n.dropped.map(d => `<div class="meta" style="margin-top:6px"><b>${esc(d.title)}</b>: ${d.problems.map(esc).join('; ')}</div>`).join('')}</details>` : ''}
-      <details><summary>History</summary>${n.history.map(h => `<div class="meta">${esc(h)}</div>`).join('')}</details>
-      ${OPEN_NEGOTIATION.has(n.status) && n.status !== 'applying' ? `<div class="row"><button class="act" data-stop="${esc(n.id)}">Cancel negotiation</button></div>` : ''}
-    </div>`;
-  };
-  $view.innerHTML = `
-    <h2>Recovery plans</h2>
-    <p class="lead">When a slip puts a customer promise or several teams at risk, the affected leads choose a plan here or in their inbox. The chosen plan is applied for everyone; if any step fails, the steps already made are undone.</p>
-    ${ns.length ? ns.map(body).join('') : '<div class="empty">No negotiations yet. One starts when a slip affects a customer promise or more than one team.</div>'}`;
-  const vote = async (el, id, round, plan, reason) => {
-    try { await post(`/negotiations/${encodeURIComponent(id)}/vote`, { round: Number(round), plan, by: state.person, reason }); setTimeout(render, 600); }
-    catch (e) { alertInline(el, e.message); }
-  };
-  $view.querySelectorAll('[data-vote]').forEach(b => b.onclick = () => vote(b, b.dataset.n, b.dataset.round, b.dataset.vote, null));
-  $view.querySelectorAll('[data-reject]').forEach(b => b.onclick = () =>
-    vote(b, b.dataset.reject, b.dataset.round, 'reject', $view.querySelector(`[data-reason="${CSS.escape(b.dataset.reject)}"]`)?.value || null));
-  $view.querySelectorAll('[data-stop]').forEach(b => b.onclick = async () => {
-    try { await post(`/negotiations/${encodeURIComponent(b.dataset.stop)}/cancel`, { by: state.person }); setTimeout(render, 600); }
-    catch (e) { alertInline(b, e.message); }
-  });
-}
-
 // ------------------------------------------------------------ operations
 async function renderOps() {
   let dead, log;
@@ -470,96 +408,79 @@ async function renderTeam() {
 }
 
 
-// ------------------------------------------------------------ reply drafts
-const draftEdits = {}; // id -> text typed but not saved, so the 10 s refresh never loses it
-const writing = new Set(); // ids Claude is rewriting
+// ------------------------------------------------------------ follow-up drafts (on the Promises page)
+// promise id -> { draft, writing, previous, error, edit }: kept across the 10 s refresh so a draft stays open.
+const followUps = {};
+const hasUnsavedDraft = () => Object.values(followUps).some(f => f.edit !== undefined && f.draft && f.edit !== f.draft.body);
 
-function updateDraftCount(ds) {
-  const n = ds.filter(d => d.status === 'ready' || d.status === 'edited').length;
-  const el = document.getElementById('draftCount');
-  el.hidden = !n; el.textContent = n;
-}
-async function refreshDraftCount() {
-  if (!state.person) return;
-  try { updateDraftCount(await api('/drafts')); } catch { /* the badge is optional */ }
-}
-
-const DRAFT_PILL = { ready: ['suggested', 'to review'], edited: ['active', 'edited'], done: ['completed', 'sent'], dismissed: ['dismissed', 'dismissed'] };
-const draftPill = st => { const [cls, label] = DRAFT_PILL[st] || [st, st]; return `<span class="pill s-${esc(cls)}">${esc(label)}</span>`; };
-const writer = d => d.writtenBy === 'template' ? 'a plain template (Claude was not available)' : 'Claude' + (d.writtenBy ? ` (${esc(d.writtenBy)})` : '');
-
-function draftCard(d) {
-  const open = d.status === 'ready' || d.status === 'edited';
-  const text = draftEdits[d.id] ?? d.body;
-  return `<div class="card ${open ? '' : 'done'}" data-draft="${esc(d.id)}">
-    <div class="draft-head"><div><b>${esc(d.subject)}</b> <span class="meta">to ${esc(d.to || '—')}</span></div>
-      <div>${draftPill(d.status)}</div></div>
-    <div class="meta">Drafted by ${writer(d)} · ${when(d.createdAt)}${d.status === 'edited' ? ' · edited ' + when(d.updatedAt) : ''}</div>
-    ${d.promises.length ? `<div class="chips">${d.promises.map(p => `<span class="chip" title="${esc(p.status)}">${esc(p.what)}${p.due ? ' · ' + esc(p.due) : ''} (${esc(name(p.owner))})</span>`).join('')}</div>` : '<div style="height:8px"></div>'}
-    ${writing.has(d.id) ? '<div class="empty">Claude is rewriting this draft…</div>' : `<textarea aria-label="Draft reply to ${esc(d.to)}" ${open ? '' : 'readonly'}>${esc(text)}</textarea>`}
-    ${open ? `<div class="row">
-      <button class="act primary" data-dact="copy">Copy</button>
+function followUpPanel(id) {
+  const f = followUps[id];
+  if (f.error) return `<div class="err">${esc(f.error)}</div><div class="row"><button class="act" data-fu="close">Close</button></div>`;
+  if (f.writing || !f.draft) return '<div class="meta">Claude is reading the email thread and drafting a follow-up…</div>';
+  const d = f.draft;
+  const text = f.edit ?? d.body;
+  return `<div class="draft-head"><div><b>${esc(d.subject)}</b> <span class="meta">to ${esc(d.to || '—')}</span></div>
+      <span class="meta">${d.writtenBy === 'template' ? 'Plain template (Claude was not available)' : 'Drafted by Claude'} · ${when(d.updatedAt)}</span></div>
+    <textarea aria-label="Follow-up draft">${esc(text)}</textarea>
+    <div class="row">
+      <button class="act primary" data-fu="copy">Copy</button>
       <a class="act" href="${esc(d.gmailUrl)}" target="_blank" rel="noopener">Open thread in Gmail</a>
-      <button class="act" data-dact="save" ${draftEdits[d.id] !== undefined && draftEdits[d.id] !== d.body ? '' : 'hidden'}>Save changes</button>
-      <button class="act" data-dact="done">Mark as sent</button>
-      <button class="act" data-dact="dismissed">Dismiss</button>
+      <button class="act" data-fu="save" ${f.edit !== undefined && f.edit !== d.body ? '' : 'hidden'}>Save changes</button>
+      <button class="act" data-fu="close">Close</button>
       <span class="err" role="alert"></span></div>
-    <div class="row"><input type="text" style="flex:1;min-width:200px" placeholder="Ask Claude to change it, e.g. “shorter” or “push the date to Monday”" aria-label="Instruction for Claude">
-      <button class="act" data-dact="regenerate">Rewrite</button></div>`
-    : `<div class="row"><button class="act" data-dact="ready">Reopen</button><span class="err" role="alert"></span></div>`}
-  </div>`;
+    <div class="row"><input type="text" style="flex:1;min-width:200px" placeholder="Ask Claude to change it, e.g. “shorter” or “more formal”" aria-label="Instruction for Claude">
+      <button class="act" data-fu="rewrite">Rewrite</button></div>`;
 }
 
-async function renderDrafts() {
-  if (!state.person) { $view.innerHTML = '<div class="empty">Choose who you are at the top right.</div>'; return; }
-  const ds = await api('/drafts');
-  updateDraftCount(ds);
-  const open = ds.filter(d => d.status === 'ready' || d.status === 'edited');
-  const closed = ds.filter(d => !(d.status === 'ready' || d.status === 'edited'));
-  $view.innerHTML = `
-    <h2>Reply drafts</h2>
-    <p class="lead">When an email brings a new promise or request, Claude drafts your reply from the whole thread and the promises around it.
-      Nothing is sent from here: copy a draft into Gmail, then mark it as sent.</p>
-    ${open.length ? open.map(draftCard).join('') : '<div class="empty">No drafts waiting. They appear here after an email brings a promise.</div>'}
-    ${closed.length ? `<details style="margin-top:20px"><summary>${closed.length} sent or dismissed</summary>${closed.map(draftCard).join('')}</details>` : ''}`;
-  $view.querySelectorAll('[data-draft] textarea').forEach(t => t.oninput = () => {
-    const id = t.closest('[data-draft]').dataset.draft;
-    draftEdits[id] = t.value;
-    const save = t.closest('[data-draft]').querySelector('[data-dact="save"]');
-    if (save) save.hidden = t.value === (ds.find(d => d.id === id) || {}).body;
-  });
-  $view.querySelectorAll('[data-dact]').forEach(b => b.onclick = () => draftAction(b, ds));
-}
-
-async function draftAction(button, ds) {
-  const cardEl = button.closest('[data-draft]');
-  const id = cardEl.dataset.draft;
-  const err = cardEl.querySelector('.err');
-  const act = button.dataset.dact;
-  const text = cardEl.querySelector('textarea')?.value ?? '';
+/** Asks for a follow-up; if Claude has to write it, checks back every 2 s until it appears (up to 90 s). */
+async function startFollowUp(id, instruction = null, regenerate = false) {
+  followUps[id] = { ...(followUps[id] || {}), writing: true, error: null };
+  delete followUps[id].edit;
+  render();
   try {
-    if (act === 'copy') {
-      await navigator.clipboard.writeText(text);
-      button.textContent = 'Copied'; setTimeout(() => { button.textContent = 'Copy'; }, 1500);
-      return;
+    const r = await post(`/drafts/promise/${encodeURIComponent(id)}`, { instruction, regenerate });
+    if (r.status === 'ready') { followUps[id] = { draft: r.draft }; render(); return; }
+    const previous = r.previous;
+    for (let i = 0; i < 45; i++) {
+      await new Promise(res => setTimeout(res, 2000));
+      if (!followUps[id]) return; // closed meanwhile
+      const g = await api(`/drafts/promise/${encodeURIComponent(id)}`);
+      if (g.draft && g.draft.updatedAt !== previous) { followUps[id] = { draft: g.draft }; render(); return; }
     }
-    button.disabled = true;
-    if (act === 'save') {
-      await put(`/drafts/${encodeURIComponent(id)}`, { body: text });
-      delete draftEdits[id];
-    } else if (act === 'regenerate') {
-      const instruction = cardEl.querySelector('input[type=text]')?.value || null;
-      await post(`/drafts/${encodeURIComponent(id)}/regenerate`, { instruction });
-      delete draftEdits[id];
-      writing.add(id);
-      setTimeout(() => { writing.delete(id); render(); }, 6000);
-    } else {
-      if (draftEdits[id] !== undefined && act === 'done') await put(`/drafts/${encodeURIComponent(id)}`, { body: text });
-      await post(`/drafts/${encodeURIComponent(id)}/status`, { status: act });
-      delete draftEdits[id];
-    }
-    render();
-  } catch (e) { err.textContent = e.message; button.disabled = false; }
+    followUps[id] = { error: 'No draft yet. Claude may be busy; try again in a minute (the app log says more).' };
+  } catch (e) { followUps[id] = { error: e.message }; }
+  render();
+}
+
+function wireFollowUps() {
+  $view.querySelectorAll('[data-draft-for]').forEach(b => b.onclick = () => {
+    const id = b.dataset.draftFor;
+    if (followUps[id]) { delete followUps[id]; render(); } else startFollowUp(id);
+  });
+  $view.querySelectorAll('tr[data-fu-row]').forEach(row => {
+    const id = row.dataset.fuRow;
+    const t = row.querySelector('textarea');
+    if (t) t.oninput = () => {
+      followUps[id].edit = t.value;
+      row.querySelector('[data-fu="save"]').hidden = t.value === followUps[id].draft.body;
+    };
+    row.querySelectorAll('[data-fu]').forEach(b => b.onclick = async () => {
+      const err = row.querySelector('.err');
+      try {
+        if (b.dataset.fu === 'close') { delete followUps[id]; render(); }
+        else if (b.dataset.fu === 'copy') {
+          await navigator.clipboard.writeText(t.value);
+          b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+        } else if (b.dataset.fu === 'save') {
+          b.disabled = true;
+          followUps[id] = { draft: await put(`/drafts/${encodeURIComponent(followUps[id].draft.id)}`, { body: t.value }) };
+          render();
+        } else if (b.dataset.fu === 'rewrite') {
+          startFollowUp(id, row.querySelector('input[type=text]').value || null, true);
+        }
+      } catch (e) { if (err) err.textContent = e.message; b.disabled = false; }
+    });
+  });
 }
 
 // ------------------------------------------------------------ theme
@@ -583,7 +504,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', paintThe
 paintThemeToggle();
 
 // ------------------------------------------------------------ shell
-const views = { inbox: renderInbox, drafts: renderDrafts, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, plans: renderPlans, ops: renderOps, team: renderTeam };
+const views = { inbox: renderInbox, promises: renderPromises, links: renderLinks, graph: renderGraph, handoffs: renderHandoffs, ops: renderOps, team: renderTeam };
 async function render() {
   try { await views[state.tab](); }
   catch (e) { $view.innerHTML = `<div class="empty">Could not load: ${esc(e.message)}. Is the app running?</div>`; }
@@ -640,15 +561,12 @@ async function init() {
   if (state.person) sel.value = state.person;
   // With Gmail connected the only viewer is that account, so say so instead of offering a choice.
   if (state.me.mode !== 'google' && state.people.length === 1) { document.querySelector('.who').firstChild.textContent = 'Gmail account '; sel.disabled = true; }
-  sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); refreshDraftCount(); };
+  sel.onchange = () => { state.person = sel.value; store.set('pg.person', sel.value); render(); };
   const saved = store.get('pg.tab');
   if (saved && views[saved] && !document.querySelector(`#tabs [data-tab="${saved}"]`).hidden) document.querySelector(`#tabs [data-tab="${saved}"]`).click(); else render();
-  refreshDraftCount();
   setInterval(() => {
-    if ($view.querySelector('input:focus, select:focus, textarea:focus')) return;
-    if (state.tab === 'drafts' && Object.keys(draftEdits).length) return refreshDraftCount(); // keep unsaved edits on screen
+    if ($view.querySelector('input:focus, select:focus, textarea:focus') || hasUnsavedDraft()) return; // keep what's being typed
     render();
-    if (state.tab !== 'drafts') refreshDraftCount();
   }, 10000);
 }
 init();

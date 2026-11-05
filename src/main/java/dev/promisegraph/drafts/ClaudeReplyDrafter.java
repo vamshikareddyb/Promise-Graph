@@ -25,8 +25,18 @@ public final class ClaudeReplyDrafter implements ReplyDrafter {
               from another conversation, given as background.
             - "now": the current time, to resolve relative dates.
             - "instruction": optional guidance from the owner for this draft.
+            - "follow_up_on": optional. When present, the owner asked for a follow-up about this
+              one promise (it is also in "promises"), not a general reply.
 
-            Write the reply the owner would send to the latest message from reply_to:
+            For a follow-up, write the email the owner would send now, in this thread, to reply_to:
+            - If the owner owes the promise: a short update on it. Say it is on track for its due
+              date, or, if the status is at_risk or the date has passed, say so honestly and offer a
+              [new date] for the owner to fill in. If it may be done, leave "[attach / link it here]".
+            - If reply_to owes it: a polite check-in on it, restating what was promised and the due
+              date, and asking whether it is still on track. Firmer, but still friendly, if overdue.
+            - Stay on that promise; mention another only if the thread ties them together.
+
+            Otherwise, write the reply the owner would send to the latest message from reply_to:
             - Confirm each of the owner's promises in this thread plainly: what they will do and by
               when, using the tracked due date written like "Friday 20 Nov".
             - Thank the other person for each promise they made and restate its date, so it is on
@@ -72,6 +82,9 @@ public final class ClaudeReplyDrafter implements ReplyDrafter {
                 o.put("quote", n.quote());
             }
         }
+        ctx.focus().ifPresent(f -> p.putObject("follow_up_on").put("what", f.what()).put("owner", f.owner())
+                .put("recipient", f.recipient()).put("due", f.due()).put("status", f.status())
+                .put("owner_owes_it", f.owner() != null && f.owner().equalsIgnoreCase(ctx.owner())));
         if (ctx.instruction() != null && !ctx.instruction().isBlank()) {
             p.put("instruction", ctx.instruction().strip());
         }

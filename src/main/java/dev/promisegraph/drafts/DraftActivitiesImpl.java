@@ -44,7 +44,8 @@ public final class DraftActivitiesImpl implements DraftActivities {
     static final int MAX_TEXT = 3000;
     static final int MAX_PROMISES = 20;
 
-    private final boolean enabled;
+    /** Draft replies automatically after extraction; otherwise only when the person asks. */
+    private final boolean auto;
     private final WorkflowClient client;
     private final Repository repo;
     private final DraftStore store;
@@ -54,9 +55,9 @@ public final class DraftActivitiesImpl implements DraftActivities {
     private final Supplier<Optional<String>> personalOwner;
     private final Clock clock;
 
-    public DraftActivitiesImpl(boolean enabled, WorkflowClient client, Repository repo, DraftStore store,
+    public DraftActivitiesImpl(boolean auto, WorkflowClient client, Repository repo, DraftStore store,
             Function<String, Optional<GmailApi>> gmail, Supplier<Optional<String>> personalOwner, Clock clock) {
-        this.enabled = enabled;
+        this.auto = auto;
         this.client = client;
         this.repo = repo;
         this.store = store;
@@ -69,7 +70,7 @@ public final class DraftActivitiesImpl implements DraftActivities {
 
     @Override
     public void startDrafts(List<DraftRequest> requests) {
-        if (!enabled) {
+        if (!auto) {
             return;
         }
         for (DraftRequest r : requests) {
@@ -96,6 +97,7 @@ public final class DraftActivitiesImpl implements DraftActivities {
     @Override
     public Prepared prepareDraft(DraftRequest req) {
         Message m = req.message();
+        boolean followUp = req.promiseId() != null;
         Optional<EmailRef> ref = EmailRef.of(m);
         if (ref.isEmpty()) {
             return Prepared.skip("not an email");
@@ -104,54 +106,99 @@ public final class DraftActivitiesImpl implements DraftActivities {
         if (owner == null) {
             return Prepared.skip("no mailbox owner");
         }
-        if (m.sender() != null && m.sender().equalsIgnoreCase(owner)) {
+        // A reply answers someone else's email; a follow-up may start from the person's own.
+        if (!followUp && m.sender() != null && m.sender().equalsIgnoreCase(owner)) {
             return Prepared.skip("you wrote this email");
         }
-        String draftId = ReplyDraft.idFor(req.tenant(), m.id());
-        if (!req.replace() && store.get(req.tenant(), draftId).isPresent()) {
+        if (!req.replace() && store.get(req.tenant(), ReplyDraft.idFor(req.tenant(), req.key())).isPresent()) {
             return Prepared.skip("already drafted");
+        }
+        Optional<Promise> focus = followUp ? repo.getPromise(req.tenant(), req.promiseId()) : Optional.empty();
+        if (followUp && focus.isEmpty()) {
+            return Prepared.skip("no such promise");
         }
 
         List<GmailMessage> raw = readThread(ref.get());
         List<ThreadMessage> thread = new ArrayList<>();
         String subject = null;
-        String replyTo = m.sender();
+        String sourceReplyTo = null;
+        String sourceTo = null;
+        String lastOtherSender = null;
         boolean answered = false;
         long sourceAt = raw.stream().filter(g -> g.id().equals(ref.get().gmailId())).mapToLong(GmailMessage::internalDate).findFirst()
                 .orElse(Long.MAX_VALUE);
         for (GmailMessage g : raw) {
+            if (g.labelIds().contains("DRAFT")) {
+                continue;
+            }
             String from = GmailMapper.address(g.header("From"));
             boolean mine = from != null && from.equalsIgnoreCase(owner);
             if (subject == null && g.header("Subject") != null) {
                 subject = g.header("Subject");
             }
-            if (g.id().equals(ref.get().gmailId()) && g.header("Reply-To") != null) {
-                replyTo = GmailMapper.address(g.header("Reply-To"));
+            if (g.id().equals(ref.get().gmailId())) {
+                sourceReplyTo = GmailMapper.address(g.header("Reply-To"));
+                sourceTo = firstAddress(g.header("To"));
             }
-            if (mine && g.internalDate() > sourceAt && !g.labelIds().contains("DRAFT")) {
+            if (!mine && from != null) {
+                lastOtherSender = from;
+            }
+            if (mine && g.internalDate() > sourceAt) {
                 answered = true; // the person already replied after this email
-            }
-            if (g.labelIds().contains("DRAFT")) {
-                continue;
             }
             String text = clip(Redactor.redact(EmailText.clean(g.plainText(), g.html())));
             if (!text.isBlank()) {
                 thread.add(new ThreadMessage(from, Instant.ofEpochMilli(g.internalDate()).atOffset(ZoneOffset.UTC).toString(), text, mine));
             }
         }
-        if (answered && !req.replace()) {
+        if (!followUp && answered && !req.replace()) {
             return Prepared.skip("already answered in Gmail");
         }
         if (thread.isEmpty() && m.text() != null && !m.text().isBlank()) {
-            thread.add(new ThreadMessage(m.sender(), m.ts(), clip(m.text()), false)); // no Gmail access: the one email
+            // no Gmail access: the one email
+            thread.add(new ThreadMessage(m.sender(), m.ts(), clip(m.text()), m.sender() != null && m.sender().equalsIgnoreCase(owner)));
         }
         if (thread.size() > MAX_THREAD_MESSAGES) {
             thread = new ArrayList<>(thread.subList(thread.size() - MAX_THREAD_MESSAGES, thread.size()));
         }
 
-        List<PromiseNote> promises = promisesAround(req.tenant(), m.channel(), owner, replyTo == null ? m.sender() : replyTo);
+        String replyTo = followUp
+                ? firstOf(otherParty(focus.get(), owner), lastOtherSender, notMe(sourceReplyTo, owner), notMe(m.sender(), owner),
+                        notMe(sourceTo, owner))
+                : firstOf(sourceReplyTo, m.sender());
+        List<PromiseNote> promises = new ArrayList<>(promisesAround(req.tenant(), m.channel(), owner, replyTo));
+        if (focus.isPresent() && promises.stream().noneMatch(p -> p.id().equals(req.promiseId()))) {
+            promises.add(0, note(focus.get(), true)); // made in another thread than its evidence: still the subject
+        }
         return new Prepared(new DraftContext(req.tenant(), owner, ref.get().mailbox(), ref.get().threadId(), m.channel(), m.id(),
-                replyTo == null ? m.sender() : replyTo, subject, thread, promises, req.instruction(), Instant.now(clock).toString()), null);
+                replyTo, subject, thread, promises, req.instruction(), Instant.now(clock).toString(), req.promiseId()), null);
+    }
+
+    /** Whoever the promise is between besides the person: its owner, or who it was made to. */
+    private static String otherParty(Promise p, String me) {
+        String other = notMe(p.owner(), me);
+        return other != null ? other : notMe(p.recipient(), me);
+    }
+
+    private static String notMe(String address, String me) {
+        return address == null || address.isBlank() || address.equalsIgnoreCase(me) || !address.contains("@") ? null : address;
+    }
+
+    private static String firstOf(String... candidates) {
+        for (String c : candidates) {
+            if (c != null && !c.isBlank()) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /** The first address in a header like {@code "A <a@x.com>, b@y.com"}. */
+    static String firstAddress(String header) {
+        if (header == null || header.isBlank()) {
+            return null;
+        }
+        return GmailMapper.address(header.split(",")[0]);
     }
 
     private List<GmailMessage> readThread(EmailRef ref) {

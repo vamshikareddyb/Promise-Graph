@@ -120,7 +120,27 @@ class DraftsTest {
         Prepared first = a.prepareDraft(DraftRequest.first("demo", EMAIL));
         a.saveDraft(ReplyDraft.of(first.context(), new DraftContracts.Written("Hi", "template"), "2026-11-04T10:00:00Z"), false);
         assertThat(a.prepareDraft(DraftRequest.first("demo", EMAIL)).skipped()).isEqualTo("already drafted");
-        assertThat(a.prepareDraft(new DraftRequest("demo", EMAIL, "shorter", true)).context()).isNotNull();
+        assertThat(a.prepareDraft(new DraftRequest("demo", EMAIL, "shorter", true, null)).context()).isNotNull();
+    }
+
+    @Test
+    void followUpOnYourOwnEmailGoesToTheOtherPerson() {
+        InMemoryRepository repo = new InMemoryRepository();
+        repo.createPromise(promise("p9", ME, null, "send the project report", "2026-11-06", "email:t9"));
+        Message mine = new Message("gmail-abc123", "email:t9", ME, "2026-11-04T09:00:00Z", "I will send the project report by friday", "demo");
+        GmailApi api = gmail(List.of(new GmailMessage("abc123", "t9", List.of(), 2000,
+                Map.of("From", ME, "To", "Neha Kapoor <neha.kapoor@example.com>, x@y.com", "Subject", "Report"), mine.text(), null)));
+
+        Prepared p = activities(repo, new InMemoryDraftStore(), Optional.of(api))
+                .prepareDraft(DraftRequest.followUp("demo", mine, "p9", null, false));
+
+        assertThat(p.context().replyTo()).isEqualTo("neha.kapoor@example.com");
+        assertThat(p.context().focus()).hasValueSatisfying(f -> assertThat(f.id()).isEqualTo("p9"));
+        String body = TemplateReplyDrafter.compose(p.context());
+        assertThat(body).contains("I'm on track to send the project report by Friday 6 Nov");
+        ReplyDraft d = ReplyDraft.of(p.context(), new DraftContracts.Written(body, "template"), "2026-11-04T10:00:00Z");
+        assertThat(d.id()).isEqualTo(ReplyDraft.forPromise("demo", "p9"));
+        assertThat(d.promiseIds()).containsExactly("p9");
     }
 
     @Test
@@ -128,7 +148,7 @@ class DraftsTest {
         DraftContext ctx = new DraftContext("demo", ME, null, "t9", "email:t9", EMAIL.id(), "neha.kapoor@example.com", "Pricing",
                 List.of(), List.of(new PromiseNote("p1", "Send the pricing deck", "neha.kapoor@example.com", ME, "2026-11-06", "active", null, true),
                         new PromiseNote("p2", "review the contract", ME, "neha.kapoor@example.com", "2026-11-12", "active", null, true)),
-                null, "2026-11-04T10:00:00Z");
+                null, "2026-11-04T10:00:00Z", null);
         String body = TemplateReplyDrafter.compose(ctx);
         assertThat(body).startsWith("Hi Neha,")
                 .contains("Noted that you'll send the pricing deck by Friday 6 Nov")
@@ -147,7 +167,7 @@ class DraftsTest {
         }, "claude-sonnet-5-5", 800);
         DraftContext ctx = new DraftContext("demo", ME, null, "t9", "email:t9", EMAIL.id(), "neha.kapoor@example.com", "Pricing",
                 List.of(new ThreadMessage("neha.kapoor@example.com", "2026-11-04T09:00:00Z", EMAIL.text(), false)), List.of(),
-                "keep it short", "2026-11-04T10:00:00Z");
+                "keep it short", "2026-11-04T10:00:00Z", null);
 
         DraftContracts.Written w = claude.write(ctx);
 
