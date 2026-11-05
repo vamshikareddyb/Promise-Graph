@@ -276,11 +276,11 @@ async function renderHandoffs() {
   const item = (h, i) => `<tr><td>${esc(i.what)}${i.due ? `<div class="meta">due ${esc(i.due)}</div>` : ''}</td>
       <td>${esc(name(i.acceptedOwner || i.proposedOwner || '—'))}</td><td>${pill(i.state)}</td>
       <td>${['needs_owner', 'proposed', 'uncovered'].includes(i.state) && !['returned', 'cancelled'].includes(h.status)
-        ? `<select data-h="${esc(h.id)}" data-p="${esc(i.promiseId)}"><option value="">Ask someone…</option>${peopleOpt}</select>` : ''}</td></tr>`;
+        ? `<select data-h="${esc(h.id)}" data-p="${esc(i.promiseId)}"><option value="">Assign to…</option>${peopleOpt}</select>` : ''}</td></tr>`;
   $view.innerHTML = `
     <h2>Handoffs</h2>
-    <p class="lead">Who takes over what when someone is away or leaves. Leave: cover is asked as soon as it's entered, work moves on the first day away and back the day after.
-      Leaving the company: their lead approves the plan, and work moves for good after their last day.</p>
+    <p class="lead">Who takes over what when someone is away or leaves. Their lead (or an admin) sees every open promise, assigns each one to a teammate and approves;
+      nobody gets anything before that. Leave: promises move on the first day away and back the day after. Leaving the company: they move for good after the last day.</p>
     <div class="card"><b>Plan an absence</b><div class="row">
       <select id="ap">${peopleOpt}</select> from <input type="date" id="as"> to <input type="date" id="ae">
       <label><input type="checkbox" id="aleave"> leaving the company (no end date)</label>
@@ -294,8 +294,9 @@ async function renderHandoffs() {
         : `<div class="meta">${mine && h.status === 'scheduled'
           ? `You have no open promises right now, so there's nothing to hand over. Promises you make before you go get cover on ${esc(planDay(h.startsOn))}${h.endsOn ? ', and come back to you the day after you return' : ''}.`
           : 'Nothing planned yet.'}</div>`}
-      ${h.status === 'awaiting_approval' && !mine ? `<div class="row"><button class="act primary" data-approve="${esc(h.id)}">Approve handover plan</button>
-        <span class="meta">As their lead: check who takes what above, then approve. Nothing moves before that.</span></div>` : ''}
+      ${mine && h.status === 'awaiting_approval' ? '<div class="meta">Your lead is assigning these to teammates; you’ll be told who takes what.</div>' : ''}
+      ${h.status === 'awaiting_approval' && !mine ? `<div class="row"><button class="act primary" data-approve="${esc(h.id)}">Approve assignments</button>
+        <span class="meta">Check who takes each promise (change it with “Assign to…”), then approve. Teammates get nothing before that.</span></div>` : ''}
       ${['scheduled', 'planning', 'awaiting_approval', 'awaiting_cover', 'covered', 'active'].includes(h.status) ? `<div class="row"><button class="act" data-cancel="${esc(h.id)}">${
         mine ? (h.status === 'active' ? "I'm back early" : h.endsOn ? 'Cancel my leave' : "I'm not leaving")
              : (h.status === 'active' ? 'They are back early' : h.endsOn ? 'Cancel absence' : 'They are not leaving')}</button></div>` : ''}
