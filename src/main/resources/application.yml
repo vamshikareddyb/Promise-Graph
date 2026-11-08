@@ -50,6 +50,12 @@ promisegraph:
     max-tokens: ${PG_DRAFTS_MAX_TOKENS:1200}
     ollama-url: ${PG_OLLAMA_URL:http://localhost:11434}
     ollama-model: ${PG_OLLAMA_MODEL:gemma4:e4b}
+  payload-encryption:
+    enabled: ${PG_PAYLOAD_ENCRYPTION:true}          # encrypt workflow data before it reaches Temporal
+    key: ${PG_PAYLOAD_KEY:}                         # base64 32-byte key; empty: the key file below
+    old-keys: ${PG_PAYLOAD_OLD_KEYS:}               # retired keys, comma-separated, to read older history
+    key-file: ${PG_PAYLOAD_KEY_FILE:${user.home}/.promise-graph/payload.key}
+    codec-origins: ${PG_CODEC_ORIGINS:http://localhost:8080}   # pages allowed to call /codec (the Temporal UI)
   titles:
     writer: ${PG_TITLES_WRITER:ollama}       # ollama: the local model titles new promises (rules if Ollama is off) | rules
     model: ${PG_TITLES_MODEL:}               # empty: same model as drafts (PG_OLLAMA_MODEL)

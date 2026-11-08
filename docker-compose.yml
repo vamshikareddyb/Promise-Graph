@@ -32,6 +32,10 @@ services:
       - temporal
     environment:
       TEMPORAL_ADDRESS: temporal:7233
+      # Workflow data is encrypted by the app. Your browser asks the app's codec server to decrypt it
+      # for display, so the address is as seen from your browser, not from this container.
+      TEMPORAL_CODEC_ENDPOINT: http://localhost:8787/codec
+      TEMPORAL_CODEC_INCLUDE_CREDENTIALS: "true"   # sends the Promise Graph sign-in cookie (team mode)
     ports:
       - "8080:8080"
 
