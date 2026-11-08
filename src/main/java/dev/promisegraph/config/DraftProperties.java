@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param model the Claude model for drafts; blank means the same model as extraction
  * @param maxTokens the longest reply the model may write
  * @param ollamaUrl where Ollama listens
- * @param ollamaModel the local model to use, e.g. {@code llama3.2}
+ * @param ollamaModel the local model to use, e.g. {@code gemma4:e4b}
  */
 @ConfigurationProperties("promisegraph.drafts")
 public record DraftProperties(Boolean auto, String writer, String model, int maxTokens, String ollamaUrl, String ollamaModel) {
@@ -24,7 +24,7 @@ public record DraftProperties(Boolean auto, String writer, String model, int max
             throw new IllegalArgumentException("promisegraph.drafts.writer must be 'claude', 'ollama' or 'template', got " + writer);
         }
         ollamaUrl = ollamaUrl == null || ollamaUrl.isBlank() ? "http://localhost:11434" : ollamaUrl.strip();
-        ollamaModel = ollamaModel == null || ollamaModel.isBlank() ? "llama3.2" : ollamaModel.strip();
+        ollamaModel = ollamaModel == null || ollamaModel.isBlank() ? "gemma4:e4b" : ollamaModel.strip();
         if (maxTokens < 200 || maxTokens > 8000) {
             maxTokens = 1200;
         }

@@ -50,6 +50,8 @@
   .banner a { color: inherit; font-weight: 600; }
   .note { margin-top: 4px; font-size: 13px; color: var(--warn); }
   h2.section { margin-top: 36px; }
+  .sortbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+  .sortbar label { display: flex; gap: 6px; align-items: center; }
   /* Sign-in screen: a split card, art and caption on the left, Google sign-in on the right. */
   body.auth header { display: none; }
   body.auth main { max-width: none; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
@@ -209,31 +211,73 @@ const promisePill = s => `<span class="pill s-${s === 'kept' ? 'completed' : esc
 const linksNote = p => [p.dependsOn.length ? 'waits on ' + p.dependsOn.length : '', p.blocks.length ? p.blocks.length + ' wait on it' : '']
   .filter(Boolean).join(', ');
 
+// Sort for the Promises page. "date" shows only promises due on the picked day; "owner" groups by owner.
+const PROMISE_SORTS = { due: 'Due soonest', newest: 'Newest', oldest: 'Oldest', date: 'Due on a date', owner: 'Owner' };
+const byText = (f, dir = 1) => (a, b) => dir * String(f(a) || '').localeCompare(String(f(b) || ''));
+const dueFirst = (a, b) => String(a.due || '9999').localeCompare(String(b.due || '9999'));
+function sortPromises(list, closedList) {
+  const sort = state.promiseSort || 'due';
+  let out = list.slice();
+  if (sort === 'date' && state.promiseDate) out = out.filter(p => p.due === state.promiseDate);
+  if (sort === 'owner' && state.promiseOwner) out = out.filter(p => p.owner === state.promiseOwner);
+  if (sort === 'newest') return out.sort(byText(p => p.createdAt, -1));
+  if (sort === 'oldest') return out.sort(byText(p => p.createdAt));
+  if (sort === 'owner') return out.sort((a, b) => name(a.owner).localeCompare(name(b.owner)) || dueFirst(a, b));
+  if (closedList && sort !== 'date') return out.sort(byText(p => p.updatedAt, -1)); // history: last closed first
+  return out.sort(dueFirst);
+}
+function promiseSortBar(owners) {
+  const sort = state.promiseSort || 'due';
+  return `<div class="toolbar sortbar"><label>Sort <select id="pSort">
+      ${Object.entries(PROMISE_SORTS).map(([k, v]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    ${sort === 'date' ? `<input type="date" id="pDate" aria-label="Due date" value="${esc(state.promiseDate || '')}">
+      ${state.promiseDate ? '<button class="act" id="pDateClear">Clear</button>' : '<span class="meta">Pick a day</span>'}` : ''}
+    ${sort === 'owner' ? `<select id="pOwner" aria-label="Owner"><option value="">All owners</option>
+      ${owners.map(o => `<option value="${esc(o)}" ${o === state.promiseOwner ? 'selected' : ''}>${esc(name(o))}</option>`).join('')}</select>` : ''}</div>`;
+}
+const SORT_LEAD = { due: 'soonest due first', newest: 'newest first', oldest: 'oldest first', owner: 'by owner' };
+
 async function renderPromises() {
   const ps = await api('/promises?all=true');
-  const open = ps.filter(p => OPEN_PROMISE.has(p.status));
-  const closed = ps.filter(p => !OPEN_PROMISE.has(p.status) && (p.status === 'kept' || state.allPromises))
-    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  const owners = [...new Set(ps.map(p => p.owner))].sort((a, b) => name(a).localeCompare(name(b)));
+  const open = sortPromises(ps.filter(p => OPEN_PROMISE.has(p.status)), false);
+  const closed = sortPromises(ps.filter(p => !OPEN_PROMISE.has(p.status) && (p.status === 'kept' || state.allPromises)), true);
+  const sort = state.promiseSort || 'due';
+  const order = sort === 'date' ? (state.promiseDate ? 'due on ' + state.promiseDate : 'soonest due first') : SORT_LEAD[sort];
   const about = p => `${esc(p.what)}${p.latestQuote ? `<div class="meta">“${esc(p.latestQuote)}”</div>` : ''}
     ${p.handoff ? `<div class="note">${esc(p.handoff)}</div>` : ''}${p.recipient && p.recipient !== p.owner ? `<div class="meta">for ${esc(name(p.recipient))}</div>` : ''}
     ${linksNote(p) ? `<div class="meta">${esc(linksNote(p))}</div>` : ''}`;
   $view.innerHTML = `
     <h2>Promises</h2>
-    <p class="lead">${open.length} open, soonest due first. Mark one done when it's finished; it moves to the history below.
+    <p class="lead">${open.length} open, ${esc(order)}. Mark one done when it's finished; it moves to the history below.
       For a promise from an email, a follow-up can be drafted from the whole thread.</p>
+    ${promiseSortBar(owners)}
     ${open.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Follow-up</th></tr></thead><tbody>
       ${open.map(p => `<tr><td>${about(p)}</td><td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td>
         <td>${p.canComplete ? `<button class="act" data-done="${esc(p.id)}" title="Currently ${esc(PROMISE_LABEL[p.status] || p.status)}">Mark done</button><div class="err"></div>` : promisePill(p.status)}</td>
         <td>${p.canDraft ? `<button class="act ${followUps[p.id] ? 'primary' : ''}" data-draft-for="${esc(p.id)}">${followUps[p.id] ? 'Hide draft' : 'Draft a follow-up'}</button>` : ''}</td></tr>
         ${followUps[p.id] ? `<tr data-fu-row="${esc(p.id)}" class="fu-row"><td colspan="5">${followUpPanel(p.id)}</td></tr>` : ''}`).join('')}
-      </tbody></table>` : '<div class="empty">No open promises. Send a message or connect Gmail.</div>'}
+      </tbody></table>` : `<div class="empty">${sort === 'date' && state.promiseDate ? 'No open promises due on ' + esc(state.promiseDate) + '.'
+        : sort === 'owner' && state.promiseOwner ? 'No open promises for ' + esc(name(state.promiseOwner)) + '.'
+        : 'No open promises. Send a message or connect Gmail.'}</div>`}
     <h2 class="section">Completed promises</h2>
     <div class="toolbar"><label><input type="checkbox" id="allP" ${state.allPromises ? 'checked' : ''}> Also show missed and cancelled</label></div>
     ${closed.length ? `<table><thead><tr><th>Promise</th><th>Owner</th><th>Due</th><th>Status</th><th>Closed on</th></tr></thead><tbody>
       ${closed.map(p => `<tr><td>${about(p)}</td><td>${esc(name(p.owner))}</td><td>${esc(p.due || '—')}</td><td>${promisePill(p.status)}</td>
         <td class="meta">${esc(String(p.updatedAt || '').slice(0, 10) || '—')}</td></tr>`).join('')}
-      </tbody></table>` : '<div class="empty">Nothing completed yet.</div>'}`;
+      </tbody></table>` : `<div class="empty">${(sort === 'date' && state.promiseDate) || (sort === 'owner' && state.promiseOwner)
+        ? 'No completed promises match.' : 'Nothing completed yet.'}</div>`}`;
   document.getElementById('allP').onchange = e => { state.allPromises = e.target.checked; render(); };
+  document.getElementById('pSort').onchange = e => { state.promiseSort = e.target.value; render(); };
+  const pDate = document.getElementById('pDate');
+  if (pDate) {
+    pDate.onchange = e => { state.promiseDate = e.target.value || null; render(); };
+    if (!state.promiseDate) { try { pDate.showPicker(); } catch (_) { pDate.focus(); } }
+  }
+  const pDateClear = document.getElementById('pDateClear');
+  if (pDateClear) pDateClear.onclick = () => { state.promiseDate = null; render(); };
+  const pOwner = document.getElementById('pOwner');
+  if (pOwner) pOwner.onchange = e => { state.promiseOwner = e.target.value || null; render(); };
   wireFollowUps();
   $view.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => {
     b.disabled = true; b.textContent = 'Marking…';

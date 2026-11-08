@@ -8,6 +8,7 @@ import dev.promisegraph.gmail.GmailApi;
 import dev.promisegraph.team.TeamMailboxes;
 import dev.promisegraph.domain.TimingPolicy;
 import dev.promisegraph.extraction.Extractor;
+import dev.promisegraph.extraction.OllamaTitler;
 import dev.promisegraph.gmail.GmailActivitiesImpl;
 import dev.promisegraph.gmail.MailboxOwner;
 import dev.promisegraph.handoff.Directory;
@@ -103,9 +104,9 @@ public class TemporalConfig {
     }
 
     @Bean
-    ModelActivitiesImpl modelActivities(Extractor extractor) {
+    ModelActivitiesImpl modelActivities(Extractor extractor, ObjectProvider<OllamaTitler> titler) {
         // The simulated company is the directory for now. A directory sync replaces this later.
-        return new ModelActivitiesImpl(extractor, Company.directory());
+        return new ModelActivitiesImpl(extractor, Company.directory(), titler.getIfAvailable());
     }
 
     @Bean
