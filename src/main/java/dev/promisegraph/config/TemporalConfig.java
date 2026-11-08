@@ -7,6 +7,8 @@ import dev.promisegraph.drafts.ReplyDrafter;
 import dev.promisegraph.gmail.GmailApi;
 import dev.promisegraph.team.TeamMailboxes;
 import dev.promisegraph.domain.TimingPolicy;
+import dev.promisegraph.codec.EncryptionCodec;
+import dev.promisegraph.codec.PayloadCipher;
 import dev.promisegraph.extraction.Extractor;
 import dev.promisegraph.extraction.OllamaTitler;
 import dev.promisegraph.gmail.GmailActivitiesImpl;
@@ -42,6 +44,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.temporal.client.WorkflowClient;
 import io.temporal.common.reporter.MicrometerClientStatsReporter;
 import io.temporal.client.WorkflowClientOptions;
+import io.temporal.common.converter.CodecDataConverter;
+import io.temporal.common.converter.DataConverter;
+import io.temporal.common.converter.DefaultDataConverter;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.client.schedules.Schedule;
 import io.temporal.client.schedules.ScheduleActionStartWorkflow;
@@ -56,6 +61,8 @@ import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
 import java.util.Optional;
 import java.time.Clock;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,10 +97,42 @@ public class TemporalConfig {
         return WorkflowServiceStubs.newServiceStubs(options.build());
     }
 
+    /**
+     * The encryption codec, or none when {@code PG_PAYLOAD_ENCRYPTION=false}. Loading the key fails
+     * start-up on purpose: running without it would write readable data or fail to read history.
+     */
     @Bean
-    WorkflowClient workflowClient(WorkflowServiceStubs stubs, PromiseGraphProperties props) {
-        return WorkflowClient.newInstance(stubs,
-                WorkflowClientOptions.newBuilder().setNamespace(props.temporal().namespace()).build());
+    EncryptionCodec encryptionCodec(PayloadEncryptionProperties enc) throws IOException {
+        if (!enc.enabled()) {
+            log.warn("payload encryption: OFF. Workflow data reaches Temporal readable (PG_PAYLOAD_ENCRYPTION=false)");
+            return null;
+        }
+        PayloadCipher cipher = PayloadCipher.load(enc.key(), enc.oldKeys(), Path.of(enc.keyFile()));
+        log.info("payload encryption: on, AES-256-GCM, key id {}{} ({}); codec server at /codec for {}", cipher.currentKeyId(),
+                cipher.keyCount() > 1 ? " plus " + (cipher.keyCount() - 1) + " older key(s)" : "",
+                enc.key().isEmpty() ? "key file " + enc.keyFile() : "PG_PAYLOAD_KEY", enc.codecOrigins());
+        return new EncryptionCodec(cipher);
+    }
+
+    /**
+     * How every value becomes a Temporal payload: the default JSON conversion, then the codec. With
+     * failure encoding on, error messages and stack traces are encrypted too, since they can quote
+     * an email.
+     */
+    @Bean
+    DataConverter dataConverter(ObjectProvider<EncryptionCodec> codec) {
+        EncryptionCodec c = codec.getIfAvailable();
+        return c == null ? DefaultDataConverter.newDefaultInstance()
+                : new CodecDataConverter(DefaultDataConverter.newDefaultInstance(), List.of(c), true);
+    }
+
+    @Bean
+    WorkflowClient workflowClient(WorkflowServiceStubs stubs, PromiseGraphProperties props, DataConverter dataConverter) {
+        // Workers are made from this client, so they use the same converter to read what they are given.
+        return WorkflowClient.newInstance(stubs, WorkflowClientOptions.newBuilder()
+                .setNamespace(props.temporal().namespace())
+                .setDataConverter(dataConverter)
+                .build());
     }
 
     @Bean
@@ -151,21 +190,24 @@ public class TemporalConfig {
 
     /** Starts the workers and makes sure the schedules exist, unless this instance only serves HTTP or replays. */
     @Bean
-    ApplicationRunner startWorkers(WorkerFactory factory, WorkflowServiceStubs stubs, PromiseGraphProperties props) {
+    ApplicationRunner startWorkers(WorkerFactory factory, WorkflowServiceStubs stubs, PromiseGraphProperties props, DataConverter dataConverter) {
         return args -> {
             if (!props.temporal().workerEnabled()) {
                 log.info("worker disabled on this instance");
                 return;
             }
             factory.start();
-            ensureSchedules(stubs, props);
+            ensureSchedules(stubs, props, dataConverter);
             log.info("worker running: tenant={} extractor={} store={}", props.tenant(), props.extractor(), props.store());
         };
     }
 
-    static void ensureSchedules(WorkflowServiceStubs stubs, PromiseGraphProperties props) {
-        ScheduleClient schedules = ScheduleClient.newInstance(stubs,
-                ScheduleClientOptions.newBuilder().setNamespace(props.temporal().namespace()).build());
+    static void ensureSchedules(WorkflowServiceStubs stubs, PromiseGraphProperties props, DataConverter dataConverter) {
+        // A schedule stores its workflow's arguments, so they go through the codec like everything else.
+        ScheduleClient schedules = ScheduleClient.newInstance(stubs, ScheduleClientOptions.newBuilder()
+                .setNamespace(props.temporal().namespace())
+                .setDataConverter(dataConverter)
+                .build());
         ensure(schedules, "digest-" + props.tenant(), DigestWorkflow.class, "digest-run-" + props.tenant(), DIGEST_CRON, props);
         ensure(schedules, "reconcile-" + props.tenant(), ReconcileWorkflow.class, "reconcile-run-" + props.tenant(), RECONCILE_CRON, props);
     }

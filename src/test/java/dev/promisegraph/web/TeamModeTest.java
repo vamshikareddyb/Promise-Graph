@@ -119,6 +119,16 @@ class TeamModeTest {
     }
 
     @Test
+    void theCodecServerDecryptsOnlyForSignedInAdmins() throws Exception {
+        String body = "{\"payloads\":[{\"metadata\":{},\"data\":\"" + Base64.getEncoder().encodeToString("x".getBytes()) + "\"}]}";
+        mvc.perform(post("/codec/decode").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/codec/decode").sessionAttr(AuthController.USER, "neha@x.com").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/codec/decode").sessionAttr(AuthController.USER, "boss@x.com").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void onlyAdminsEditThePeoplePage() throws Exception {
         String body = "{\"team\":\"analytics\",\"role\":\"Data engineer\"}";
         mvc.perform(put("/api/team/neha@x.com").sessionAttr(AuthController.USER, "neha@x.com")

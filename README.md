@@ -125,6 +125,23 @@ that off): the rules can only cut the sentence down ("attend a meeting"), the mo
 On a weaker laptop use `gemma4:e2b`. A local model is slower than Claude (often 10-60 seconds per
 draft on a laptop) and writes plainer emails.
 
+### Encrypted workflow data (payload codec)
+
+Everything the app hands to Temporal (email text, quotes, names, promise details, error messages) is
+encrypted with AES-256-GCM before it leaves the app. Temporal's database and anyone reading it see only
+ciphertext; the key stays with the app.
+
+- **Key:** created on first start at `~/.promise-graph/payload.key`. Back it up: without it, existing
+  workflows can't be read. Or set `PG_PAYLOAD_KEY` (base64 of 32 random bytes).
+- **Rotating the key:** put the new key in `PG_PAYLOAD_KEY` and the old one in `PG_PAYLOAD_OLD_KEYS`.
+  New data uses the new key; older history still opens with the old one.
+- **Temporal UI:** it asks the app's codec server (`POST /codec/decode`, `POST /codec/encode`) to show
+  the data readable. `docker-compose.yml` already points the UI there. In team mode only a signed-in
+  lead or admin gets readable data; otherwise only a browser on this computer.
+- **Older workflows:** history written before encryption was turned on still reads; it is passed through
+  unchanged.
+- **Not encrypted:** workflow IDs and types, task queues and timers, and the app's own Postgres tables.
+
 ### Settings
 
 | Variable | Default | Meaning |
@@ -138,6 +155,10 @@ draft on a laptop) and writes plainer emails.
 | `PG_OLLAMA_MODEL` | `gemma4:e4b` | The local model for drafts and titles (`gemma4:e2b` for a weaker laptop) |
 | `PG_TITLES_WRITER` | `ollama` | The local model titles new promises (rules when Ollama is off); `rules`: titles cut from the sentence |
 | `PG_TITLES_MODEL` | empty | A different local model for titles (empty: `PG_OLLAMA_MODEL`) |
+| `PG_PAYLOAD_ENCRYPTION` | `true` | Encrypt workflow data sent to Temporal. Turn off only on a fresh Temporal: encrypted history can't be read without it |
+| `PG_PAYLOAD_KEY` | empty | The encryption key (base64, 32 bytes); empty: `~/.promise-graph/payload.key` (`PG_PAYLOAD_KEY_FILE`) |
+| `PG_PAYLOAD_OLD_KEYS` | empty | Retired keys, comma-separated, so older history still opens after a rotation |
+| `PG_CODEC_ORIGINS` | `http://localhost:8080` | Pages allowed to call the codec server from a browser (the Temporal UI) |
 | `PG_OLLAMA_URL` | `http://localhost:11434` | Where Ollama listens |
 | `PG_DRAFTS_MODEL` | empty | A different Claude model for drafts (empty: `PG_MODEL`) |
 | `PG_HANDOFF_PLANNER` | `agent` | Claude plans handoff cover; `rules` uses the built-in rules |
