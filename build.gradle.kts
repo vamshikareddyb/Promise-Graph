@@ -52,6 +52,11 @@ tasks.test {
     systemProperty("junit.jupiter.execution.timeout.default", "3m")
     systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "SEPARATE_THREAD")
     timeout.set(Duration.ofMinutes(25))
+    // Tests set their own configuration. Settings left in the shell to run the app (PG_AUTH=google,
+    // PG_STORE=jdbc, an API key, ...) must not leak in and switch a test into another mode.
+    // PG_RECORD_HISTORIES is the one meant for tests: it re-records the replay histories.
+    val appSettings = Regex("^(PG_|DATABASE_|TEMPORAL_|ANTHROPIC_).*|^(PORT|SERVER_ADDRESS)$")
+    environment = environment.filterKeys { !appSettings.matches(it) || it == "PG_RECORD_HISTORIES" }
     testLogging {
         events("started", "failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
