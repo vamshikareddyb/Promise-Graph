@@ -106,20 +106,24 @@ follow [docs/team-setup.md](docs/team-setup.md).
 On Windows, use `.\gradlew.bat` instead of `./gradlew`. If Java 25 is your default, point Gradle at
 Java 21 first: `$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21…"`.
 
-### Free drafts with a local model (Ollama)
+### Free drafts and titles with a local model (Ollama)
 
-Follow-up drafts can come from a free model running on your own computer instead of Claude: no API
-key, no cost, and email never leaves the machine. Install Ollama from https://ollama.com, then:
+Follow-up drafts and promise titles can come from a free model running on your own computer instead
+of Claude: no API key, no cost, and email never leaves the machine. Install Ollama from
+https://ollama.com, then:
 
 ```powershell
-ollama pull llama3.2              # one-time download, about 2 GB
+ollama pull gemma4:e4b            # one-time download
 $env:PG_DRAFTS_WRITER = "ollama"
 .\gradlew.bat bootRun
 ```
 
-The log says `reply drafts: local model llama3.2 through Ollama`. A local model is slower than
-Claude (often 10-60 seconds per draft on a laptop) and writes plainer emails; promise extraction
-keeps using Claude if a key is set, otherwise the built-in rules.
+The log says `reply drafts: local model gemma4:e4b through Ollama` and `promise titles: local model
+gemma4:e4b`. Titles use the local model whenever Ollama is running (`PG_TITLES_WRITER=rules` turns
+that off): the rules can only cut the sentence down ("attend a meeting"), the model names the task
+("Attend the 4 pm meeting in the main boardroom"). If Ollama isn't running, titles come from the rules.
+On a weaker laptop use `gemma4:e2b`. A local model is slower than Claude (often 10-60 seconds per
+draft on a laptop) and writes plainer emails.
 
 ### Settings
 
@@ -131,7 +135,9 @@ keeps using Claude if a key is set, otherwise the built-in rules.
 | `PG_EXTRACTOR` | `llm` | Claude finds promises; `rules` uses the built-in patterns |
 | `PG_DRAFTS_AUTO` | `false` | `true`: also draft a reply to every email that brings a promise, without being asked |
 | `PG_DRAFTS_WRITER` | `claude` | `ollama`: a free model on this computer (see below); `template`: plain text, no model |
-| `PG_OLLAMA_MODEL` | `llama3.2` | The local model for `ollama` (e.g. `qwen2.5:7b` for better drafts on a stronger PC) |
+| `PG_OLLAMA_MODEL` | `gemma4:e4b` | The local model for drafts and titles (`gemma4:e2b` for a weaker laptop) |
+| `PG_TITLES_WRITER` | `ollama` | The local model titles new promises (rules when Ollama is off); `rules`: titles cut from the sentence |
+| `PG_TITLES_MODEL` | empty | A different local model for titles (empty: `PG_OLLAMA_MODEL`) |
 | `PG_OLLAMA_URL` | `http://localhost:11434` | Where Ollama listens |
 | `PG_DRAFTS_MODEL` | empty | A different Claude model for drafts (empty: `PG_MODEL`) |
 | `PG_HANDOFF_PLANNER` | `agent` | Claude plans handoff cover; `rules` uses the built-in rules |

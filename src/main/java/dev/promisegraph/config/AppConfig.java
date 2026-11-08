@@ -11,6 +11,7 @@ import dev.promisegraph.drafts.ReplyDrafter;
 import dev.promisegraph.drafts.TemplateReplyDrafter;
 import dev.promisegraph.extraction.Extractor;
 import dev.promisegraph.extraction.FallbackExtractor;
+import dev.promisegraph.extraction.OllamaTitler;
 import dev.promisegraph.extraction.RuleBasedExtractor;
 import dev.promisegraph.extraction.model.AnthropicExtractor;
 import dev.promisegraph.gmail.MailboxOwner;
@@ -189,6 +190,18 @@ public class AppConfig {
             noKey("promise extraction");
         }
         return new RuleBasedExtractor();
+    }
+
+    /** Titles for new promises from a free local model; the rules' titles stay when it's off or unreachable. */
+    @Bean
+    OllamaTitler ollamaTitler(TitleProperties titles, DraftProperties drafts) {
+        if (!"ollama".equals(titles.writer())) {
+            log.info("promise titles: built-in rules (PG_TITLES_WRITER=rules)");
+            return null;
+        }
+        String model = titles.model().isEmpty() ? drafts.ollamaModel() : titles.model();
+        log.info("promise titles: local model {} through Ollama at {} (built-in rules if it isn't running)", model, drafts.ollamaUrl());
+        return new OllamaTitler(drafts.ollamaUrl(), model);
     }
 
     /** The reply-draft agent: Claude writes the reply; without a key, a plain acknowledgement is drafted. */

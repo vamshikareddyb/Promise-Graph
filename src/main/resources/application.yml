@@ -49,7 +49,10 @@ promisegraph:
     model: ${PG_DRAFTS_MODEL:}               # empty: same model as extraction
     max-tokens: ${PG_DRAFTS_MAX_TOKENS:1200}
     ollama-url: ${PG_OLLAMA_URL:http://localhost:11434}
-    ollama-model: ${PG_OLLAMA_MODEL:llama3.2}
+    ollama-model: ${PG_OLLAMA_MODEL:gemma4:e4b}
+  titles:
+    writer: ${PG_TITLES_WRITER:ollama}       # ollama: the local model titles new promises (rules if Ollama is off) | rules
+    model: ${PG_TITLES_MODEL:}               # empty: same model as drafts (PG_OLLAMA_MODEL)
   privacy:
     admins: ${PG_ADMINS:}   # comma-separated ids allowed on the operations page besides team leads
   auth:
